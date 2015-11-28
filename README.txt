@@ -2,8 +2,7 @@
 Overview:
 
 
-Make ILSpy a command line tools for MacOsx ,Linux and any mono supported  platform  base on the ILSpy,
-because ILSpy does not work in MacOsx.
+Make ILSpy a command line tools for MacOsx ,Linux and any mono supported  platform, because ILSpy does not work in MacOsx.
 
 It's import from https://github.com/icsharpcode/ILSpy
 So thanks to ILSpy Contributors:
