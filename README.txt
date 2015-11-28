@@ -36,5 +36,5 @@ Usage:
 
 How to build:
 
-Open the ILSpyMac.sln by MonoDevelop or Xamarin, the click the build button.
+Open the ILSpyMac.sln by MonoDevelop or Xamarin, then click the build button.
 
