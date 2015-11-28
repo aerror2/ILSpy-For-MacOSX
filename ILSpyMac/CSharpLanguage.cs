@@ -562,6 +562,10 @@ namespace ICSharpCode.ILSpy
 					if (r.Name != "mscorlib") {
 						w.WriteStartElement("Reference");
 						w.WriteAttributeString("Include", r.Name);
+						LoadedAssembly tmp = options.assenmlyList.findAssemblyByShortName (r.Name);
+						if (tmp != null) {
+							w.WriteElementString ("HintPath", tmp.FileName);
+						}
 						w.WriteEndElement();
 					}
 				}
@@ -644,7 +648,7 @@ namespace ICSharpCode.ILSpy
 					return Path.Combine(dir, file);
 				}
 			}, StringComparer.OrdinalIgnoreCase).ToList();
-			AstMethodBodyBuilder.ClearUnhandledOpcodes();
+ 			AstMethodBodyBuilder.ClearUnhandledOpcodes();
 //			Parallel.ForEach(
 //				files,
 //				new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },

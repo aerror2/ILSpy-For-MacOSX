@@ -27,10 +27,14 @@ I like that style instead of a GUI.
 It's better that reading the codes in the IDE than reading it in the ILSpy GUI, more feature help you understand the decompiled codes.
 
 Usage:
-
-	mono ILSpyMac  path/to/all/your/dll  solution_name 
-
-	by aerror.
+ ILSpyMac [options] directory/to/all/your/dll 
+ made it run at all platform support mono.
+ by aerror 2015/11/27
+ options:
+       -n  Solution Name
+       -l  References dll path which dll will be loaded but not decompile , they use as References.
+ Example:
+ ILSpyMac -n Example -l /directory/to/Rerences/dll /directory/to/all/your/dll
 
 
 How to build:

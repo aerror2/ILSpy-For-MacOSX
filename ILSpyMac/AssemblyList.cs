@@ -31,7 +31,7 @@ namespace ICSharpCode.ILSpy
 	/// <summary>
 	/// A list of assemblies.
 	/// </summary>
-	public sealed class AssemblyList
+	public  class AssemblyList
 	{
 		readonly string listName;
 		
@@ -90,6 +90,17 @@ namespace ICSharpCode.ILSpy
 				new XAttribute("name", this.ListName),
 				assemblies.Where(asm => !asm.IsAutoLoaded).Select(asm => new XElement("Assembly", asm.FileName))
 			);
+		}
+
+		public LoadedAssembly findAssemblyByShortName (string shortName)
+		{
+			foreach (LoadedAssembly asm in assemblies) {
+				if (asm.ShortName == shortName) {
+					return asm;
+				}
+			}
+
+			return null;
 		}
 		
 		/// <summary>

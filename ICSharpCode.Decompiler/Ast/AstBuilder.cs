@@ -334,7 +334,11 @@ namespace ICSharpCode.Decompiler.Ast
 						ConvertCustomAttributes(enumMember, field);
 						enumMember.AddAnnotation(field);
 						enumMember.Name = CleanName(field.Name);
-						long memberValue = (long)CSharpPrimitiveCast.Cast(TypeCode.Int64, field.Constant, false);
+						long memberValue = 0;
+						if (field.Constant != null)
+							memberValue = (long)CSharpPrimitiveCast.Cast (TypeCode.Int64, field.Constant, false);
+						else
+							Console.WriteLine ("Exception:" + field.ToString () + " field.Constant  is null");
 						if (forcePrintingInitializers || memberValue != expectedEnumMemberValue) {
 							enumMember.AddChild(new PrimitiveExpression(CSharpPrimitiveCast.Cast(baseType, field.Constant, false)), EnumMemberDeclaration.InitializerRole);
 						}

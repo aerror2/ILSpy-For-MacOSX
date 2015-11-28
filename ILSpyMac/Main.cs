@@ -16,31 +16,112 @@ namespace Decomplier
 	class MainClass
 	{
 
-		 
+		private static void showUsage()
+		{
+			Console.WriteLine (" Usage: ILSpyMac [options] directory/to/all/your/dll ");
+			Console.WriteLine (" made it run at all platform support mono.");
+			Console.WriteLine (" by aerror 2015/11/27");
+			Console.WriteLine (" options:");
+			Console.WriteLine ("       -n  Solution Name");
+			Console.WriteLine ("       -l  References dll path which dll will be loaded but not decompile , they use as References.");
 
+			Console.WriteLine (" Example:");
+			Console.WriteLine (" ILSpyMac -n Example -l /directory/to/Rerences/dll /directory/to/all/your/dll");
+
+
+		}
 
 		public static void Main (string[] args)
 		{
-			if (args.Length != 2 ) {
-				Console.WriteLine (" Usage: ILSpyMac  directory/to/all/your/dll slnName");
-				Console.WriteLine (" made it run at all platform support mono.");
-				Console.WriteLine (" by aerror 2015/11/27");
+			string appPath = null;
+			string slnName = null;
+			string libPath = null;
+			string expOpt = null;
+
+			//parsing args
+			foreach (string x in args) {
+
+				if (expOpt == null) {
+					switch (x) {
+					case "-n":
+						expOpt = x;
+						continue;
+					case "-l":
+						expOpt = x;
+						continue;
+					
+					default:
+						if (appPath == null) {
+							appPath = x;
+							continue;
+						} else {
+							Console.WriteLine (" Unexpected options " + x);
+							showUsage ();
+							return;
+						}
+
+					}
+
+				} else {
+
+					switch (expOpt) {
+					case "-n":
+						slnName = x;
+
+						break;
+					case "-l":
+						libPath = x;
+						break;
+					default:
+						showUsage ();
+						return;
+					
+					}
+					expOpt = null;
+
+				}
+					
+			}
+
+
+			if (appPath == null) {
+			
+				Console.WriteLine ("directory/to/all/your/dll missing");
+				showUsage ();
 				return;
 			}
 
-			string appPath = args [0];
-			string slnName = args [1];
+			if (slnName == null) {
+
+				Console.WriteLine ("Solution Name missing");
+				showUsage ();
+				return;
+			}
+
+
+
+
 			Console.WriteLine ("Decompiling all dll in  " + appPath);
 			Console.WriteLine ("Please wait...");
 
 			DirectoryInfo di = new DirectoryInfo(appPath);
-			FileInfo[] allAssemblies = di.GetFiles("*.dll");
+			FileInfo[] dllFileInfoList = di.GetFiles("*.dll");
 			AssemblyList asmlist = new AssemblyList ("mylistname");
 
-			foreach (var assemblyFile in allAssemblies)
+			foreach (var dllfile in dllFileInfoList)
 			{
-				asmlist.OpenAssembly (assemblyFile.FullName);
+				asmlist.OpenAssembly (dllfile.FullName);
 			}
+
+			if (libPath != null) {
+				di = new DirectoryInfo(libPath);
+				dllFileInfoList = di.GetFiles("*.dll");
+				foreach (var dllfile in dllFileInfoList) {
+					asmlist.OpenAssembly (dllfile.FullName,true);
+				}
+			}
+			
+
 
 			StringBuilder projSln = new StringBuilder ();
 			projSln.Append ("Microsoft Visual Studio Solution File, Format Version 11.00\n# Visual Studio 2010\n");
@@ -53,6 +134,9 @@ namespace Decomplier
 			foreach (LoadedAssembly asm in ls) {
 				num++;
 				Console.WriteLine(asm.FileName + " " + num+"/"+ls.Length);
+				if (asm.IsAutoLoaded)
+					continue;
+				
 				string projectPath = appPath + "/"+ asm.ShortName;
 				Directory.CreateDirectory (projectPath);
 				string projectFileName = projectPath + "/" + asm.ShortName + ".csproj";
@@ -61,11 +145,13 @@ namespace Decomplier
 				var decompilationOptions = new DecompilationOptions ();
 				decompilationOptions.FullDecompilation = true;
 				decompilationOptions.SaveAsProjectDirectory = projectPath;
+				decompilationOptions.assenmlyList = asmlist;
 				decompilationOptions.DecompilerSettings = new DecompilerSettings ();
+
 				csharpLanguage.DecompileAssembly (asm, textOutput, decompilationOptions);
 				File.WriteAllText (projectFileName, textOutput.ToString ());
 
-			
+				
 				Guid createdProjGuid = decompilationOptions.createdProjectGuid;
 				
 				projSln.Append("   Project(\"{");
