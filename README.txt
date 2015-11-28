@@ -37,3 +37,15 @@ How to build:
 
 Open the ILSpyMac.sln by MonoDevelop or Xamarin, then click the build button.
 
+.NET 4.0 required.
+
+Check your Mono.Framework at /Library/Frameworks, it should looks like:
+
+
+ll /Library/Frameworks/Mono.framework/Versions/
+total 8
+drwxr-xr-x  13 root  admin  442 11 28 22:36 3.10.0
+drwxr-xr-x@ 12 root  admin  408  9 29 05:51 4.0.4
+lrwxr-xr-x   1 root  admin   49 11 28 22:37 Current -> /Library/Frameworks/Mono.framework/Versions/4.0.4
+
+
