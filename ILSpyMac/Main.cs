@@ -131,28 +131,42 @@ namespace Decomplier
 
 			int num = 0;
 			LoadedAssembly [] ls = asmlist.GetAssemblies ();
+			var decompilationOptions = new DecompilationOptions ();
+			decompilationOptions.FullDecompilation = true;
+			decompilationOptions.assenmlyList = asmlist;
+			decompilationOptions.DecompilerSettings = new DecompilerSettings ();
+
+			foreach (LoadedAssembly asm in ls) {
+				if (asm.IsAutoLoaded)
+					continue;
+
+				string projectPath = appPath + "/"+ asm.ShortName;
+				if(!Directory.Exists(projectPath))
+				{
+					Directory.CreateDirectory (projectPath);
+				}
+				string projectFileName = projectPath + "/" + asm.ShortName + ".csproj";
+				asm.ProjectGuid = Guid.NewGuid();
+				asm.ProjectFileName = projectFileName;
+			}
+
+
+
 			foreach (LoadedAssembly asm in ls) {
 				num++;
 				Console.WriteLine(asm.FileName + " " + num+"/"+ls.Length);
 				if (asm.IsAutoLoaded)
 					continue;
-				
-				string projectPath = appPath + "/"+ asm.ShortName;
-				Directory.CreateDirectory (projectPath);
-				string projectFileName = projectPath + "/" + asm.ShortName + ".csproj";
+
 				var csharpLanguage = new CSharpLanguage ();
 				var textOutput = new PlainTextOutput ();
-				var decompilationOptions = new DecompilationOptions ();
-				decompilationOptions.FullDecompilation = true;
-				decompilationOptions.SaveAsProjectDirectory = projectPath;
-				decompilationOptions.assenmlyList = asmlist;
-				decompilationOptions.DecompilerSettings = new DecompilerSettings ();
+				decompilationOptions.SaveAsProjectDirectory =  appPath + "/"+ asm.ShortName;
 
 				csharpLanguage.DecompileAssembly (asm, textOutput, decompilationOptions);
-				File.WriteAllText (projectFileName, textOutput.ToString ());
+				File.WriteAllText (asm.ProjectFileName, textOutput.ToString ());
 
 				
-				Guid createdProjGuid = decompilationOptions.createdProjectGuid;
+				Guid createdProjGuid = asm.ProjectGuid;
 				
 				projSln.Append("   Project(\"{");
 				projSln.Append (slnProjGuid.ToString());

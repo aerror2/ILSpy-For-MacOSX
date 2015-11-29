@@ -34,6 +34,8 @@ namespace ICSharpCode.ILSpy
 		readonly AssemblyList assemblyList;
 		readonly string fileName;
 		readonly string shortName;
+		public  Guid ProjectGuid{ get; set;}
+		public  string ProjectFileName{ get; set; }
 		
 		public LoadedAssembly(AssemblyList assemblyList, string fileName, Stream stream = null)
 		{
@@ -46,6 +48,7 @@ namespace ICSharpCode.ILSpy
 			
 			this.assemblyTask = Task.Factory.StartNew<ModuleDefinition>(LoadAssembly, stream); // requires that this.fileName is set
 			this.shortName = Path.GetFileNameWithoutExtension(fileName);
+
 		}
 		
 		/// <summary>

@@ -61,8 +61,6 @@ namespace ICSharpCode.ILSpy
 		/// </remarks>
 		//public TextView.DecompilerTextViewState TextViewState { get; set; }
 
-		public Guid createdProjectGuid { get; set; }
-
 		public AssemblyList assenmlyList{ get; set; }
 
 //		public DecompilationOptions()

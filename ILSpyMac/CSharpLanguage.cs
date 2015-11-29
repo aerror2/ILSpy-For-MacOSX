@@ -289,7 +289,7 @@ namespace ICSharpCode.ILSpy
 				HashSet<string> directories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 				var files = WriteCodeFilesInProject(assembly.ModuleDefinition, options, directories).ToList();
 				files.AddRange(WriteResourceFilesInProject(assembly, options, directories));
-				WriteProjectFile(new TextOutputWriter(output), files, assembly.ModuleDefinition,options);
+				WriteProjectFile(new TextOutputWriter(output), files, assembly.ModuleDefinition,options,assembly.ProjectGuid);
 			}
 			else 
 			
@@ -461,12 +461,13 @@ namespace ICSharpCode.ILSpy
 
 		
 		#region WriteProjectFile
-		void WriteProjectFile(TextWriter writer, IEnumerable<Tuple<string, string>> files, ModuleDefinition module,DecompilationOptions options)
+		void WriteProjectFile(TextWriter writer, IEnumerable<Tuple<string, string>> files, ModuleDefinition module,DecompilationOptions options, Guid projGuid)
 		{
 			const string ns = "http://schemas.microsoft.com/developer/msbuild/2003";
 			string platformName = GetPlatformName(module);
-			Guid guid =  Guid.NewGuid();
-			options.createdProjectGuid = guid;
+			Guid guid = projGuid == null ? Guid.NewGuid () : projGuid;
+
+	
 			using (XmlTextWriter w = new XmlTextWriter(writer)) {
 				w.Formatting = Formatting.Indented;
 				w.WriteStartDocument();
@@ -560,16 +561,61 @@ namespace ICSharpCode.ILSpy
 				w.WriteStartElement("ItemGroup"); // References
 				foreach (AssemblyNameReference r in module.AssemblyReferences) {
 					if (r.Name != "mscorlib") {
+						LoadedAssembly tmp = options.assenmlyList.findAssemblyByShortName (r.Name);
+						if(tmp != null && tmp.ProjectGuid!=null)
+						{
+							//should use project reference
+							continue;
+						}
+
 						w.WriteStartElement("Reference");
 						w.WriteAttributeString("Include", r.Name);
-						LoadedAssembly tmp = options.assenmlyList.findAssemblyByShortName (r.Name);
 						if (tmp != null) {
 							w.WriteElementString ("HintPath", tmp.FileName);
 						}
 						w.WriteEndElement();
+
 					}
 				}
 				w.WriteEndElement(); // </ItemGroup> (References)
+
+				w.WriteStartElement("ItemGroup"); // References
+				foreach (AssemblyNameReference r in module.AssemblyReferences) {
+					if (r.Name != "mscorlib") {
+						LoadedAssembly tmp = options.assenmlyList.findAssemblyByShortName (r.Name);
+						if(tmp != null && tmp.ProjectGuid!=null && tmp.ProjectFileName!=null)
+						{
+							//				<ItemGroup>
+							//					<ProjectReference Include="..\Assembly-CSharp-firstpass\Assembly-CSharp-firstpass.csproj">
+							//				<Project>{BCB77C12-CC46-4B68-AB67-963EC2F72E44}</Project>
+							//					<Name>Assembly-CSharp-firstpass</Name>
+							//						</ProjectReference>
+							//						</ItemGroup>
+
+							w.WriteStartElement("ProjectReference");
+							w.WriteAttributeString("Include", tmp.ProjectFileName);
+							w.WriteElementString ("Project", tmp.ProjectGuid.ToString());
+							w.WriteElementString ("Name", tmp.ShortName);
+							w.WriteEndElement();
+							continue;
+						}
+						
+						w.WriteStartElement("Reference");
+						w.WriteAttributeString("Include", r.Name);
+						if (tmp != null) {
+							w.WriteElementString ("HintPath", tmp.FileName);
+						}
+						w.WriteEndElement();
+						
+					}
+				}
+				w.WriteEndElement(); // </ItemGroup> (References)
+
+
+
+
+
+
 				
 				foreach (IGrouping<string, string> gr in (from f in files group f.Item2 by f.Item1 into g orderby g.Key select g)) {
 					w.WriteStartElement("ItemGroup");
@@ -599,6 +645,12 @@ namespace ICSharpCode.ILSpy
 				return false;
 			return true;
 		}
+
+		public static void CreateDirSafely(string szdir)
+		{
+			if(!Directory.Exists(szdir))
+				Directory.CreateDirectory(szdir);
+		}
 		
 		IEnumerable<Tuple<string, string>> WriteAssemblyInfo(ModuleDefinition module, DecompilationOptions options, HashSet<string> directories)
 		{
@@ -611,7 +663,10 @@ namespace ICSharpCode.ILSpy
 				
 				string prop = "Properties";
 				if (directories.Add("Properties"))
-					Directory.CreateDirectory(Path.Combine(options.SaveAsProjectDirectory, prop));
+				{
+					CreateDirSafely(Path.Combine(options.SaveAsProjectDirectory, prop));
+	
+				}
 				string assemblyInfo = Path.Combine(prop, "AssemblyInfo" + this.FileExtension);
 				using (StreamWriter w = new StreamWriter(Path.Combine(options.SaveAsProjectDirectory, assemblyInfo)))
 					codeDomBuilder.GenerateCode(new PlainTextOutput(w));
@@ -644,7 +699,9 @@ namespace ICSharpCode.ILSpy
 				} else {
 						string dir = cleanupName(type.Namespace);
 					if (directories.Add(dir))
-						Directory.CreateDirectory(Path.Combine(options.SaveAsProjectDirectory, dir));
+					{
+						CreateDirSafely(Path.Combine(options.SaveAsProjectDirectory, dir));
+					}
 					return Path.Combine(dir, file);
 				}
 			}, StringComparer.OrdinalIgnoreCase).ToList();
@@ -691,7 +748,7 @@ namespace ICSharpCode.ILSpy
 							fileName = Path.Combine(((string)pair.Key).Split('/').Select(p => cleanupName(p)).ToArray());
 							string dirName = Path.GetDirectoryName(fileName);
 							if (!string.IsNullOrEmpty(dirName) && directories.Add(dirName)) {
-								Directory.CreateDirectory(Path.Combine(options.SaveAsProjectDirectory, dirName));
+								CreateDirSafely(Path.Combine(options.SaveAsProjectDirectory, dirName));
 							}
 							Stream entryStream = (Stream)pair.Value;
 							entryStream.Position = 0;

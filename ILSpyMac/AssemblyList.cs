@@ -170,6 +170,7 @@ namespace ICSharpCode.ILSpy
 			lock (assemblies) {
 				this.assemblies.Add(newAsm);
 			}
+
 			return newAsm;
 		}
 
