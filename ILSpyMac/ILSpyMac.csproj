@@ -41,8 +41,6 @@
   <ItemGroup>
     <Compile Include="Main.cs" />
     <Compile Include="AssemblyInfo.cs" />
-    <Compile Include="CSharpLanguage.cs" />
-    <Compile Include="Language.cs" />
     <Compile Include="DecompilationOptions.cs" />
     <Compile Include="XmlDoc\AddXmlDocTransform.cs" />
     <Compile Include="XmlDoc\XmlDocKeyProvider.cs" />
@@ -50,6 +48,11 @@
     <Compile Include="XmlDoc\XmlDocRenderer.cs" />
     <Compile Include="LoadedAssembly.cs" />
     <Compile Include="AssemblyList.cs" />
+    <Compile Include="language\CSharpLanguage.cs" />
+    <Compile Include="language\ILAstLanguage.cs" />
+    <Compile Include="language\ILLanguage.cs" />
+    <Compile Include="language\Language.cs" />
+    <Compile Include="language\Languages.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>
@@ -69,5 +72,8 @@
       <Project>{984CC812-9470-4A13-AFF9-CC44068D666C}</Project>
       <Name>ICSharpCode.Decompiler</Name>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="language\" />
   </ItemGroup>
 </Project>
