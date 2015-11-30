@@ -33,6 +33,7 @@ Usage:
  options:
        -n  Solution Name
        -l  References dll path which dll will be loaded but not decompile , they use as References.
+       -t  Output language type, accept il or csharp, default is csharp.
  Example:
  ILSpyMac -n Example -l /directory/to/Rerences/dll /directory/to/all/your/dll
 
