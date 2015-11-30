@@ -115,6 +115,7 @@ namespace Decomplier
 			Console.WriteLine ("Please wait...");
 
 			DirectoryInfo di = new DirectoryInfo(appPath);
+			appPath = di.FullName;
 			FileInfo[] dllFileInfoList = di.GetFiles("*.dll");
 			AssemblyList asmlist = new AssemblyList ("mylistname");
 
@@ -125,6 +126,7 @@ namespace Decomplier
 
 			if (libPath != null) {
 				di = new DirectoryInfo(libPath);
+				libPath = di.FullName;
 				dllFileInfoList = di.GetFiles("*.dll");
 				foreach (var dllfile in dllFileInfoList) {
 					asmlist.OpenAssembly (dllfile.FullName,true);
