@@ -27,10 +27,102 @@ namespace Decomplier
 			Console.WriteLine ("       -n  Solution Name");
 			Console.WriteLine ("       -l  References dll path which dll will be loaded but not decompile , they use as References.");
 			Console.WriteLine ("       -t  Output language type, accept il or csharp, default is csharp.");
+
+			Console.WriteLine ("       -a  Decompile yield. OFF if exists this option, default ON.");
+			Console.WriteLine ("       -b  Decompile anonymous methods/lambdas. OFF  if exists this option, default ON. ");
+			Console.WriteLine ("       -c  Decompile asyncwait. OFF  if exists this option, default ON. ");
+			Console.WriteLine ("       -d  Decompile automatic events. OFF  if exists this option, default ON. ");
+
+			Console.WriteLine ("       -e  Decompile expression trees. OFF  if exists this option, default ON. ");
+			Console.WriteLine ("       -f  Decompile automatic properties. OFF  if exists this option, default ON. ");
+			Console.WriteLine ("       -g  Decompile using statements if. OFF  exists this option, default ON. ");
+			Console.WriteLine ("       -h  Decompile foreach statements. OFF  if exists this option, default ON. ");
+
+			Console.WriteLine ("       -i  Decompile lock statements if. OFF  exists this option, default ON. ");
+			Console.WriteLine ("       -j  Decompile SwitchStatement On String. OFF  if exists this option, default ON. ");
+			Console.WriteLine ("       -k  Decompile Using Declarations. OFF  if exists this option, default ON. ");
+			Console.WriteLine ("       -r  Decompile query Expressions. OFF  if exists this option, default ON. ");
+
+			Console.WriteLine ("       -s  Decompile fully Qualify Ambiguous Type Names. OFF  if exists this option, default ON. ");
+			Console.WriteLine ("       -p  Use variable names from debug symbols, if available. OFF  if exists this option, default ON. ");
+			Console.WriteLine ("       -x  Use C# 3.0 object/collection initializers. OFF if exists this option, default ON. ");
+			Console.WriteLine ("       -y  Include XML documentation comments in the decompiled code. OFF  if exists this option, default ON.");
+			Console.WriteLine ("       -z  Fold braces. ON if exists this option, default OFF ");
+
+
+
 			Console.WriteLine (" Example:");
 			Console.WriteLine (" ILSpyMac -n Example -l /directory/to/Rerences/dll /directory/to/all/your/dll");
 
 
+		}
+
+
+		public static bool praseDecompileSetting(char c, DecompilerSettings ds)
+		{
+			switch (c) {
+			case 'a':
+				ds.YieldReturn = true;
+				break;
+			case 'b':
+				ds.AnonymousMethods = true;
+				break;
+			case 'c':
+				ds.AsyncAwait = true;
+				break;
+			case 'd':
+				ds.AutomaticEvents = false;
+				break;
+
+
+			case 'e':
+				ds.ExpressionTrees = false;
+				break;
+
+			case 'f':
+				ds.AutomaticProperties = false;
+				break;
+
+			case 'g':
+				ds.UsingStatement = false;
+				break;
+			case 'h':
+				ds.ForEachStatement = false;
+				break;
+			
+			case 'i':
+				ds.LockStatement = false;
+				break;
+			case 'j':
+				ds.SwitchStatementOnString = false;
+				break;
+			case 'k':
+				ds.UsingDeclarations = false;
+				break;
+			case 'r':
+				ds.QueryExpressions = false;
+				break;
+
+			case 's':
+				ds.FullyQualifyAmbiguousTypeNames = false;
+				break;
+			case 'p':
+				ds.UseDebugSymbols = false;
+				break;
+			case 'x':
+				ds.ObjectOrCollectionInitializers = false;
+				break;
+			case 'y':
+				ds.ShowXmlDocumentation = false;
+				break;
+			case 'z':
+				ds.FoldBraces = true;
+				break;
+			default:
+				return false;
+			}
+
+			return true;
 		}
 
 		public static void Main (string[] args)
@@ -41,6 +133,11 @@ namespace Decomplier
 			string libPath = null;
 			string expOpt = null;
 			string outLanguageType = LAN_TYPE_CSHARP;
+			DecompilerSettings ds = new DecompilerSettings ();
+			ds.AnonymousMethods = false;
+			ds.AsyncAwait = false;
+			ds.YieldReturn = false;
+
 			//parsing args
 			foreach (string x in args) {
 
@@ -53,6 +150,26 @@ namespace Decomplier
 						continue;
 					
 					default:
+
+						if (x.StartsWith ("-")) {
+
+							if (x.Length < 2) {
+								Console.WriteLine (" Unexpected options " + x);
+								showUsage ();
+								return;
+							}
+
+							for (int i = 0; i < x.Length; i++) {
+								if (!praseDecompileSetting (x [i], ds)) {
+									Console.WriteLine (" Unexpected options " + x);
+									showUsage ();
+									return;
+								}
+
+							}
+							continue;
+						} 
+
 						if (appPath == null) {
 							appPath = x;
 							continue;
@@ -61,6 +178,7 @@ namespace Decomplier
 							showUsage ();
 							return;
 						}
+
 
 					}
 
@@ -146,7 +264,9 @@ namespace Decomplier
 			var decompilationOptions = new DecompilationOptions ();
 			decompilationOptions.FullDecompilation = true;
 			decompilationOptions.assenmlyList = asmlist;
-			decompilationOptions.DecompilerSettings = new DecompilerSettings ();
+			decompilationOptions.DecompilerSettings = ds;
+
+
 			if(outLanguageType==LAN_TYPE_CSHARP)
 			{
 				foreach (LoadedAssembly asm in ls) {

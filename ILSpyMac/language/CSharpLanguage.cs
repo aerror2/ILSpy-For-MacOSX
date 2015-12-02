@@ -639,7 +639,8 @@ namespace ICSharpCode.ILSpy
 		#region WriteCodeFilesInProject
 		bool IncludeTypeWhenDecompilingProject(TypeDefinition type, DecompilationOptions options)
 		{
-			if (type.Name == "<Module>" || AstBuilder.MemberIsHidden(type, options.DecompilerSettings))
+			if (type.Name == "<Module>" || AstBuilder.MemberIsHidden(type, options.DecompilerSettings)
+			)
 				return false;
 			if (type.Namespace == "XamlGeneratedNamespace" && type.Name == "GeneratedInternalTypeHelper")
 				return false;
@@ -705,6 +706,7 @@ namespace ICSharpCode.ILSpy
 					return Path.Combine(dir, file);
 				}
 			}, StringComparer.OrdinalIgnoreCase).ToList();
+			
  			AstMethodBodyBuilder.ClearUnhandledOpcodes();
 //			Parallel.ForEach(
 //				files,
