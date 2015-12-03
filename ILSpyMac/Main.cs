@@ -62,13 +62,13 @@ namespace Decomplier
 		{
 			switch (c) {
 			case 'a':
-				ds.YieldReturn = true;
+				ds.YieldReturn = false;
 				break;
 			case 'b':
-				ds.AnonymousMethods = true;
+				ds.AnonymousMethods = false;
 				break;
 			case 'c':
-				ds.AsyncAwait = true;
+				ds.AsyncAwait = false;
 				break;
 			case 'd':
 				ds.AutomaticEvents = false;
@@ -134,9 +134,9 @@ namespace Decomplier
 			string expOpt = null;
 			string outLanguageType = LAN_TYPE_CSHARP;
 			DecompilerSettings ds = new DecompilerSettings ();
-			ds.AnonymousMethods = false;
-			ds.AsyncAwait = false;
-			ds.YieldReturn = false;
+			ds.AnonymousMethods = true;
+			ds.AsyncAwait = true;
+			ds.YieldReturn = true;
 
 			//parsing args
 			foreach (string x in args) {
@@ -235,9 +235,17 @@ namespace Decomplier
 			DirectoryInfo di = new DirectoryInfo(appPath);
 			appPath = di.FullName;
 			FileInfo[] dllFileInfoList = di.GetFiles("*.dll");
+			FileInfo[] exeFileInfoList = di.GetFiles ("*.exe");
+
+
 			AssemblyList asmlist = new AssemblyList ("mylistname");
 
 			foreach (var dllfile in dllFileInfoList)
+			{
+				asmlist.OpenAssembly (dllfile.FullName);
+			}
+
+			foreach (var dllfile in exeFileInfoList)
 			{
 				asmlist.OpenAssembly (dllfile.FullName);
 			}
