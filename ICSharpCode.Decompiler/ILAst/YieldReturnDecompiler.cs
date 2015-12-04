@@ -43,6 +43,7 @@ namespace ICSharpCode.Decompiler.ILAst
 		MethodDefinition disposeMethod;
 		FieldDefinition stateField;
 		FieldDefinition currentField;
+		MethodDefinition moveNextMethod;
 		Dictionary<FieldDefinition, ILVariable> fieldToParameterMap = new Dictionary<FieldDefinition, ILVariable>();
 		List<ILNode> newBody;
 		
@@ -82,10 +83,10 @@ namespace ICSharpCode.Decompiler.ILAst
 		
 		void Run()
 		{
-			AnalyzeCtor();
-			AnalyzeCurrentProperty();
+			//AnalyzeCtor();
+			//AnalyzeCurrentProperty();
 			ResolveIEnumerableIEnumeratorFieldMapping();
-			ConstructExceptionTable();
+		//	ConstructExceptionTable();
 			AnalyzeMoveNext();
 			TranslateFieldsToLocalAccess();
 		}
@@ -104,6 +105,8 @@ namespace ICSharpCode.Decompiler.ILAst
 				else
 					return false;
 			}
+
+
 			// stloc(var_1, newobj(..)
 			ILVariable var1;
 			if (!method.Body[0].Match(ILCode.Stloc, out var1, out newObj))
@@ -161,17 +164,33 @@ namespace ICSharpCode.Decompiler.ILAst
 		{
 			// newobj(CurrentType/...::.ctor, ldc.i4(-2))
 			ctor = null;
-			if (expr.Code != ILCode.Newobj || expr.Arguments.Count != 1)
+			if (expr.Code != ILCode.Newobj || expr.Arguments.Count != 0)
 				return false;
-			if (expr.Arguments[0].Code != ILCode.Ldc_I4)
-				return false;
-			int initialState = (int)expr.Arguments[0].Operand;
-			if (!(initialState == -2 || initialState == 0))
-				return false;
+
 			ctor = GetMethodDefinition(expr.Operand as MethodReference);
 			if (ctor == null || ctor.DeclaringType.DeclaringType != context.CurrentType)
 				return false;
-			return IsCompilerGeneratorEnumerator(ctor.DeclaringType);
+			
+			if (!IsCompilerGeneratorEnumerator (ctor.DeclaringType))
+				return false;
+
+			stateField =  ctor.DeclaringType.Fields.FirstOrDefault (v => v.Name == "$PC");
+			if (stateField == null)
+				return false;
+			
+			currentField =  ctor.DeclaringType.Fields.FirstOrDefault (v => v.Name == "$current");
+			if (currentField == null)
+				return false;
+
+			disposeMethod = ctor.DeclaringType.Methods.FirstOrDefault(m => m.Name == "Dispose");
+			if (disposeMethod == null)
+				return false;
+
+			moveNextMethod = ctor.DeclaringType.Methods.FirstOrDefault(m => m.Name == "MoveNext");
+			if (moveNextMethod == null)
+				return false;
+			
+			return true;
 		}
 		
 		public static bool IsCompilerGeneratorEnumerator(TypeDefinition type)
@@ -192,23 +211,27 @@ namespace ICSharpCode.Decompiler.ILAst
 		/// </summary>
 		void AnalyzeCtor()
 		{
-			ILBlock method = CreateILAst(enumeratorCtor);
-			
-			foreach (ILNode node in method.Body) {
-				FieldReference field;
-				ILExpression instExpr;
-				ILExpression stExpr;
-				ILVariable arg;
-				if (node.Match(ILCode.Stfld, out field, out instExpr, out stExpr) &&
-				    instExpr.MatchThis() &&
-				    stExpr.Match(ILCode.Ldloc, out arg) &&
-				    arg.IsParameter && arg.OriginalParameter.Index == 0)
-				{
-					stateField = GetFieldDefinition(field);
-				}
-			}
-			if (stateField == null)
-				throw new SymbolicAnalysisFailedException();
+//			stateField =  enumeratorCtor.DeclaringType.Fields.FirstOrDefault (v => v.Name == "$PC");
+
+//			ILBlock method = CreateILAst(enumeratorCtor);
+//			
+//			foreach (ILNode node in method.Body) {
+//				FieldReference field;
+//				ILExpression instExpr;
+//				ILExpression stExpr;
+//				ILVariable arg;
+//				if (node.Match(ILCode.Stfld, out field, out instExpr, out stExpr) &&
+//				    instExpr.MatchThis() &&
+//				    stExpr.Match(ILCode.Ldloc, out arg) &&
+//				    arg.IsParameter && arg.OriginalParameter.Index == 0)
+//				{
+//					stateField = GetFieldDefinition(field);
+//				}
+//			}
+//			if (stateField == null)
+//				throw new SymbolicAnalysisFailedException();
+
+
 		}
 		
 		/// <summary>
@@ -234,39 +257,39 @@ namespace ICSharpCode.Decompiler.ILAst
 		/// </summary>
 		void AnalyzeCurrentProperty()
 		{
-			MethodDefinition getCurrentMethod = enumeratorType.Methods.FirstOrDefault(
-				m => m.Name.StartsWith("System.Collections.Generic.IEnumerator", StringComparison.Ordinal)
-				&& m.Name.EndsWith(".get_Current", StringComparison.Ordinal));
-			ILBlock method = CreateILAst(getCurrentMethod);
-			if (method.Body.Count == 1) {
-				// release builds directly return the current field
-				ILExpression retExpr;
-				FieldReference field;
-				ILExpression ldFromObj;
-				if (method.Body[0].Match(ILCode.Ret, out retExpr) &&
-				    retExpr.Match(ILCode.Ldfld, out field, out ldFromObj) &&
-				    ldFromObj.MatchThis())
-				{
-					currentField = GetFieldDefinition(field);
-				}
-			} else if (method.Body.Count == 2) {
-				ILVariable v, v2;
-				ILExpression stExpr;
-				FieldReference field;
-				ILExpression ldFromObj;
-				ILExpression retExpr;
-				if (method.Body[0].Match(ILCode.Stloc, out v, out stExpr) &&
-				    stExpr.Match(ILCode.Ldfld, out field, out ldFromObj) &&
-				    ldFromObj.MatchThis() &&
-				    method.Body[1].Match(ILCode.Ret, out retExpr) &&
-				    retExpr.Match(ILCode.Ldloc, out v2) &&
-				    v == v2)
-				{
-					currentField = GetFieldDefinition(field);
-				}
-			}
-			if (currentField == null)
-				throw new SymbolicAnalysisFailedException();
+//			MethodDefinition getCurrentMethod = enumeratorType.Methods.FirstOrDefault(
+//				m => m.Name.StartsWith("System.Collections.Generic.IEnumerator", StringComparison.Ordinal)
+//				&& m.Name.EndsWith(".get_Current", StringComparison.Ordinal));
+//			ILBlock method = CreateILAst(getCurrentMethod);
+//			if (method.Body.Count == 1) {
+//				// release builds directly return the current field
+//				ILExpression retExpr;
+//				FieldReference field;
+//				ILExpression ldFromObj;
+//				if (method.Body[0].Match(ILCode.Ret, out retExpr) &&
+//				    retExpr.Match(ILCode.Ldfld, out field, out ldFromObj) &&
+//				    ldFromObj.MatchThis())
+//				{
+//					currentField = GetFieldDefinition(field);
+//				}
+//			} else if (method.Body.Count == 2) {
+//				ILVariable v, v2;
+//				ILExpression stExpr;
+//				FieldReference field;
+//				ILExpression ldFromObj;
+//				ILExpression retExpr;
+//				if (method.Body[0].Match(ILCode.Stloc, out v, out stExpr) &&
+//				    stExpr.Match(ILCode.Ldfld, out field, out ldFromObj) &&
+//				    ldFromObj.MatchThis() &&
+//				    method.Body[1].Match(ILCode.Ret, out retExpr) &&
+//				    retExpr.Match(ILCode.Ldloc, out v2) &&
+//				    v == v2)
+//				{
+//					currentField = GetFieldDefinition(field);
+//				}
+//			}
+//			if (currentField == null)
+//				throw new SymbolicAnalysisFailedException();
 		}
 		#endregion
 		
@@ -316,7 +339,7 @@ namespace ICSharpCode.Decompiler.ILAst
 		
 		void ConstructExceptionTable()
 		{
-			disposeMethod = enumeratorType.Methods.FirstOrDefault(m => m.Name == "System.IDisposable.Dispose");
+			disposeMethod = enumeratorType.Methods.FirstOrDefault(m => m.Name == "Dispose");
 			ILBlock ilMethod = CreateILAst(disposeMethod);
 			
 			var rangeAnalysis = new StateRangeAnalysis(ilMethod.Body[0], StateRangeAnalysisMode.IteratorDispose, stateField);
@@ -350,10 +373,11 @@ namespace ICSharpCode.Decompiler.ILAst
 		ILVariable returnVariable;
 		ILLabel returnLabel;
 		ILLabel returnFalseLabel;
-		
+		ILLabel returnTrueLabel;
+
 		void AnalyzeMoveNext()
 		{
-			MethodDefinition moveNextMethod = enumeratorType.Methods.FirstOrDefault(m => m.Name == "MoveNext");
+			//MethodDefinition 
 			ILBlock ilMethod = CreateILAst(moveNextMethod);
 			
 			if (ilMethod.Body.Count == 0)
@@ -361,7 +385,9 @@ namespace ICSharpCode.Decompiler.ILAst
 			ILExpression lastReturnArg;
 			if (!ilMethod.Body.Last().Match(ILCode.Ret, out lastReturnArg))
 				throw new SymbolicAnalysisFailedException();
-			
+
+			int returnFalseLabelPos = -1;
+			int returnTrueLabelPos = -3;
 			// There are two possibilities:
 			if (lastReturnArg.Code == ILCode.Ldloc) {
 				// a) the compiler uses a variable for returns (in debug builds, or when there are try-finally blocks)
@@ -374,9 +400,21 @@ namespace ICSharpCode.Decompiler.ILAst
 				returnVariable = null;
 				returnLabel = null;
 				// In this case, the last return must return false.
-				if (lastReturnArg.Code != ILCode.Ldc_I4 || (int)lastReturnArg.Operand != 0)
-					throw new SymbolicAnalysisFailedException();
+				if (lastReturnArg.Code != ILCode.Ldc_I4)
+				    
+				{
+					throw new SymbolicAnalysisFailedException ();
+				}
+
+				if( (int)lastReturnArg.Operand != 0) 
+				{
+					returnFalseLabelPos = -3;
+					returnTrueLabelPos = -1;
+				}
+
 			}
+	
+
 			
 			ILTryCatchBlock tryFaultBlock = ilMethod.Body[0] as ILTryCatchBlock;
 			List<ILNode> body;
@@ -431,7 +469,9 @@ namespace ICSharpCode.Decompiler.ILAst
 				bodyLength--; // don't conside the stloc instruction to be part of the body
 			}
 			// The last element in the body usually is a label pointing to the 'ret(false)'
-			returnFalseLabel = body.ElementAtOrDefault(bodyLength - 1) as ILLabel;
+			returnFalseLabel =  ilMethod.Body.ElementAtOrDefault(bodyLength +returnFalseLabelPos) as ILLabel;
+			returnTrueLabel  =  ilMethod.Body.ElementAtOrDefault(bodyLength +returnTrueLabelPos) as ILLabel;
+
 			// Note: in Roslyn-compiled code, returnFalseLabel may be null.
 			
 			var rangeAnalysis = new StateRangeAnalysis(body[0], StateRangeAnalysisMode.IteratorMoveNext, stateField);
@@ -459,86 +499,94 @@ namespace ICSharpCode.Decompiler.ILAst
 		void ConvertBody(List<ILNode> body, int startPos, int bodyLength, List<KeyValuePair<ILLabel, StateRange>> labels)
 		{
 			newBody = new List<ILNode>();
-			newBody.Add(MakeGoTo(labels, 0));
+		//	newBody.Add(MakeGoTo(labels, 0));
 			List<SetState> stateChanges = new List<SetState>();
 			int currentState = -1;
 			// Copy all instructions from the old body to newBody.
 			for (int pos = startPos; pos < bodyLength; pos++) {
 				ILExpression expr = body[pos] as ILExpression;
-				if (expr != null && expr.Code == ILCode.Stfld && expr.Arguments[0].MatchThis()) {
+				if (expr != null && expr.Code == ILCode.Stfld && expr.Arguments [0].MatchThis ()) {
 					// Handle stores to 'state' or 'current'
-					if (GetFieldDefinition(expr.Operand as FieldReference) == stateField) {
-						if (expr.Arguments[1].Code != ILCode.Ldc_I4)
-							throw new SymbolicAnalysisFailedException();
-						currentState = (int)expr.Arguments[1].Operand;
-						stateChanges.Add(new SetState(newBody.Count, currentState));
-					} else if (GetFieldDefinition(expr.Operand as FieldReference) == currentField) {
-						newBody.Add(new ILExpression(ILCode.YieldReturn, null, expr.Arguments[1]));
+					if (GetFieldDefinition (expr.Operand as FieldReference) == stateField) {
+						if (expr.Arguments [1].Code != ILCode.Ldc_I4)
+							throw new SymbolicAnalysisFailedException ();
+						currentState = (int)expr.Arguments [1].Operand;
+						stateChanges.Add (new SetState (newBody.Count, currentState));
+						ILExpression nextExpr = (pos + 1 < bodyLength) ? (body [pos + 1] as ILExpression) : null;
+						if (nextExpr != null && nextExpr.Operand == returnTrueLabel) {
+							pos++;
+							continue;
+						}
+
+					} else if (GetFieldDefinition (expr.Operand as FieldReference) == currentField) {
+						newBody.Add (new ILExpression (ILCode.YieldReturn, null, expr.Arguments [1]));
+
 					} else {
-						newBody.Add(body[pos]);
+						newBody.Add (body [pos]);
 					}
 				} else if (returnVariable != null && expr != null && expr.Code == ILCode.Stloc && expr.Operand == returnVariable) {
 					// handle store+branch to the returnVariable
-					ILExpression br = body.ElementAtOrDefault(++pos) as ILExpression;
-					if (br == null || !(br.Code == ILCode.Br || br.Code == ILCode.Leave) || br.Operand != returnLabel || expr.Arguments[0].Code != ILCode.Ldc_I4)
-						throw new SymbolicAnalysisFailedException();
-					int val = (int)expr.Arguments[0].Operand;
+					ILExpression br = body.ElementAtOrDefault (++pos) as ILExpression;
+					if (br == null || !(br.Code == ILCode.Br || br.Code == ILCode.Leave) || br.Operand != returnLabel || expr.Arguments [0].Code != ILCode.Ldc_I4)
+						throw new SymbolicAnalysisFailedException ();
+					int val = (int)expr.Arguments [0].Operand;
 					if (val == 0) {
-						newBody.Add(new ILExpression(ILCode.YieldBreak, null));
+						newBody.Add (new ILExpression (ILCode.YieldBreak, null));
 					} else if (val == 1) {
-						newBody.Add(MakeGoTo(labels, currentState));
+						newBody.Add (MakeGoTo (labels, currentState));
 					} else {
-						throw new SymbolicAnalysisFailedException();
+						throw new SymbolicAnalysisFailedException ();
 					}
 				} else if (expr != null && expr.Code == ILCode.Ret) {
-					if (expr.Arguments.Count != 1 || expr.Arguments[0].Code != ILCode.Ldc_I4)
-						throw new SymbolicAnalysisFailedException();
+					if (expr.Arguments.Count != 1 || expr.Arguments [0].Code != ILCode.Ldc_I4)
+						throw new SymbolicAnalysisFailedException ();
 					// handle direct return (e.g. in release builds)
-					int val = (int)expr.Arguments[0].Operand;
+					int val = (int)expr.Arguments [0].Operand;
 					if (val == 0) {
-						newBody.Add(new ILExpression(ILCode.YieldBreak, null));
+						newBody.Add (new ILExpression (ILCode.YieldBreak, null));
 					} else if (val == 1) {
-						newBody.Add(MakeGoTo(labels, currentState));
+						newBody.Add (MakeGoTo (labels, currentState));
 					} else {
-						throw new SymbolicAnalysisFailedException();
+						throw new SymbolicAnalysisFailedException ();
 					}
-				} else if (expr != null && expr.Code == ILCode.Call && expr.Arguments.Count == 1 && expr.Arguments[0].MatchThis()) {
-					MethodDefinition method = GetMethodDefinition(expr.Operand as MethodReference);
+				} else if (expr != null && expr.Code == ILCode.Call && expr.Arguments.Count == 1 && expr.Arguments [0].MatchThis ()) {
+					MethodDefinition method = GetMethodDefinition (expr.Operand as MethodReference);
 					if (method == null)
-						throw new SymbolicAnalysisFailedException();
+						throw new SymbolicAnalysisFailedException ();
 					StateRange stateRange;
 					if (method == disposeMethod) {
 						// Explicit call to dispose is used for "yield break;" within the method.
-						ILExpression br = body.ElementAtOrDefault(++pos) as ILExpression;
+						ILExpression br = body.ElementAtOrDefault (++pos) as ILExpression;
 						if (br == null || !(br.Code == ILCode.Br || br.Code == ILCode.Leave) || br.Operand != returnFalseLabel)
-							throw new SymbolicAnalysisFailedException();
-						newBody.Add(new ILExpression(ILCode.YieldBreak, null));
-					} else if (finallyMethodToStateRange.TryGetValue(method, out stateRange)) {
+							throw new SymbolicAnalysisFailedException ();
+						newBody.Add (new ILExpression (ILCode.YieldBreak, null));
+					} else if (finallyMethodToStateRange.TryGetValue (method, out stateRange)) {
 						// Call to Finally-method
-						int index = stateChanges.FindIndex(ss => stateRange.Contains(ss.NewState));
+						int index = stateChanges.FindIndex (ss => stateRange.Contains (ss.NewState));
 						if (index < 0)
-							throw new SymbolicAnalysisFailedException();
+							throw new SymbolicAnalysisFailedException ();
 						
-						ILLabel label = new ILLabel();
-						label.Name = "JumpOutOfTryFinally" + stateChanges[index].NewState;
-						newBody.Add(new ILExpression(ILCode.Leave, label));
+						ILLabel label = new ILLabel ();
+						label.Name = "JumpOutOfTryFinally" + stateChanges [index].NewState;
+						newBody.Add (new ILExpression (ILCode.Leave, label));
 						
-						SetState stateChange = stateChanges[index];
+						SetState stateChange = stateChanges [index];
 						// Move all instructions from stateChange.Pos to newBody.Count into a try-block
-						stateChanges.RemoveRange(index, stateChanges.Count - index); // remove all state changes up to the one we found
-						ILTryCatchBlock tryFinally = new ILTryCatchBlock();
-						tryFinally.TryBlock = new ILBlock(newBody.GetRange(stateChange.NewBodyPos, newBody.Count - stateChange.NewBodyPos));
-						newBody.RemoveRange(stateChange.NewBodyPos, newBody.Count - stateChange.NewBodyPos); // remove all nodes that we just moved into the try block
-						tryFinally.CatchBlocks = new List<ILTryCatchBlock.CatchBlock>();
-						tryFinally.FinallyBlock = ConvertFinallyBlock(method);
-						newBody.Add(tryFinally);
-						newBody.Add(label);
+						stateChanges.RemoveRange (index, stateChanges.Count - index); // remove all state changes up to the one we found
+						ILTryCatchBlock tryFinally = new ILTryCatchBlock ();
+						tryFinally.TryBlock = new ILBlock (newBody.GetRange (stateChange.NewBodyPos, newBody.Count - stateChange.NewBodyPos));
+						newBody.RemoveRange (stateChange.NewBodyPos, newBody.Count - stateChange.NewBodyPos); // remove all nodes that we just moved into the try block
+						tryFinally.CatchBlocks = new List<ILTryCatchBlock.CatchBlock> ();
+						tryFinally.FinallyBlock = ConvertFinallyBlock (method);
+						newBody.Add (tryFinally);
+						newBody.Add (label);
 					}
-				} else {
+				}
+				else {
 					newBody.Add(body[pos]);
 				}
 			}
-			newBody.Add(new ILExpression(ILCode.YieldBreak, null));
+		//	newBody.Add(new ILExpression(ILCode.YieldBreak, null));
 		}
 		
 		ILExpression MakeGoTo(ILLabel targetLabel)

@@ -258,6 +258,15 @@ namespace ICSharpCode.Decompiler.ILAst
 						} else {
 							goto default;
 						}
+				case ILCode.Stfld:
+//					IL_0000: ldarg.0
+//					IL_0001: ldc.i4.m1
+//					IL_0002: stfld int32 CodeCleaner.Program/'<TestX>c__Iterator0'::$PC
+//					IL_0007: ret
+					if ( expr.Arguments [0].MatchThis () && (expr.Operand as FieldReference).Name=="$PC") {
+						break;
+					}
+
 					default:
 						if (mode == StateRangeAnalysisMode.IteratorDispose) {
 							throw new SymbolicAnalysisFailedException();
