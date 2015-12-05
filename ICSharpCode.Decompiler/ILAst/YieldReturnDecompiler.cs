@@ -208,11 +208,33 @@ namespace ICSharpCode.Decompiler.ILAst
 					if (expr.Arguments [0].Code == ILCode.Ldloc && (expr.Arguments [0].Operand == var1 || expr.Arguments [0].Operand == var2 )
 					) {
 						FieldReference f = expr.Operand as FieldReference;
-						if (f != null && f.Name=="$PC") {
+						if (f != null && f.Name == "$PC") {
 							if (expr.Arguments [1].Code != ILCode.Ldc_I4) {
 								return false;
 							}
 							this.initPCValue = (int)expr.Arguments [1].Operand;
+						} else {
+							FieldReference storedField;
+							ILExpression ldloc, loadParameter;
+							if (!method.Body[i].Match(ILCode.Stfld, out storedField, out ldloc, out loadParameter))
+								break;
+							ILVariable loadedVar, loadedArg;
+
+							if (!ldloc.Match (ILCode.Ldloc, out loadedVar) 
+								|| (
+									!loadParameter.Match (ILCode.Ldloc, out loadedArg)
+									&& 
+									(loadParameter.Code==ILCode.Ldobj 
+									&& !loadParameter.Arguments[0].Match (ILCode.Ldloc, out loadedArg)
+									)
+								)
+							)
+								break;
+							storedField = GetFieldDefinition(storedField);
+							if (loadedVar != var1 || storedField == null || !loadedArg.IsParameter)
+								break;
+							fieldToParameterMap[(FieldDefinition)storedField] = loadedArg;
+							
 						}
 					} else {
 						return false;
@@ -244,42 +266,11 @@ namespace ICSharpCode.Decompiler.ILAst
 				}
 
 			}
+		
+
 			return true;
 
-//			int i;
-//			for (i = 1; i < method.Body.Count; i++) {
-//				// stfld(..., ldloc(var_1), ldloc(parameter))
-//				FieldReference storedField;
-//				ILExpression ldloc, loadParameter;
-//				if (!method.Body[i].Match(ILCode.Stfld, out storedField, out ldloc, out loadParameter))
-//					break;
-//				ILVariable loadedVar, loadedArg;
-//				if (!ldloc.Match(ILCode.Ldloc, out loadedVar) || !loadParameter.Match(ILCode.Ldloc, out loadedArg))
-//					return false;
-//				storedField = GetFieldDefinition(storedField);
-//				if (loadedVar != var1 || storedField == null || !loadedArg.IsParameter)
-//					return false;
-//				fieldToParameterMap[(FieldDefinition)storedField] = loadedArg;
-//			}
-//			ILVariable var2;
-//			ILExpression ldlocForStloc2;
-//			if (i < method.Body.Count && method.Body[i].Match(ILCode.Stloc, out var2, out ldlocForStloc2)) {
-//				// stloc(var_2, ldloc(var_1))
-//				if (ldlocForStloc2.Code != ILCode.Ldloc || ldlocForStloc2.Operand != var1)
-//					return false;
-//				i++;
-//			} else {
-//				// the compiler might skip the above instruction in release builds; in that case, it directly returns stloc.Operand
-//				var2 = var1;
-//			}
-//			ILExpression retArg;
-//			if (i < method.Body.Count && method.Body[i].Match(ILCode.Ret, out retArg)) {
-//				// ret(ldloc(var_2))
-//				if (retArg.Code == ILCode.Ldloc && retArg.Operand == var2) {
-//					return true;
-//				}
-//			}
-			//return false;
+		
 		}
 		
 		static FieldDefinition GetFieldDefinition(FieldReference field)
@@ -1039,10 +1030,12 @@ namespace ICSharpCode.Decompiler.ILAst
 			}
 
 
-
+			int scanTimes = vm.fistStateSwitchLabelList.Count;
+			if (initPCValue >= 0)
+				scanTimes -= 1;
 			//scan all first swith stat 
 			//
-			for(int i=0; i<vm.fistStateSwitchLabelList.Count;i++)
+			for(int i=0; i<scanTimes;i++)
 			{
 				vm.reset ();
 				if(initPCValue==0  )
@@ -1240,6 +1233,9 @@ namespace ICSharpCode.Decompiler.ILAst
 										expr.Operand = fieldToParameterMap[field];
 									} else {
 										expr.Operand = fieldToLocalMap[field];
+//										ILVariable vvtmp = (expr.Operand as ILVariable);
+//										if (vvtmp.Name == "<>f__this")
+//											expr.Operand = expr.Arguments [0].Operand;
 									}
 									expr.Arguments.Clear();
 								}
@@ -1251,6 +1247,10 @@ namespace ICSharpCode.Decompiler.ILAst
 										expr.Operand = fieldToParameterMap[field];
 									} else {
 										expr.Operand = fieldToLocalMap[field];
+//										ILVariable vvtmp = (expr.Operand as ILVariable);
+//										if (vvtmp.Name == "<>f__this")
+//											expr.Operand = expr.Arguments [0].Operand;
+									
 									}
 									expr.Arguments.RemoveAt(0);
 								}
@@ -1262,9 +1262,9 @@ namespace ICSharpCode.Decompiler.ILAst
 										expr.Operand = fieldToParameterMap[field];
 									} else {
 										expr.Operand = fieldToLocalMap[field];
-										ILVariable vvtmp = (expr.Operand as ILVariable);
-										if (vvtmp.Name == "<>f__this")
-											expr.Operand = expr.Arguments [0].Operand;
+//										ILVariable vvtmp = (expr.Operand as ILVariable);
+//										if (vvtmp.Name == "<>f__this")
+//											expr.Operand = expr.Arguments [0].Operand;
 									}
 
 
