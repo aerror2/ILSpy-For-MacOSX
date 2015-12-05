@@ -27,6 +27,7 @@ namespace ICSharpCode.Decompiler.ILAst
 
 	public class YieldVMStat
 	{
+		public int scanningStat;
 		public int fieldStat;
 		public int localStat;
 		public int localDisposeFlag;
@@ -38,6 +39,10 @@ namespace ICSharpCode.Decompiler.ILAst
 		public List<ILNode>   usefulList = new  List<ILNode>();
 		public Dictionary<ILLabel,int> labelMaping = new  Dictionary<ILLabel,int> ();
 		public List<ILLabel>	 		fistStateSwitchLabelList = new List<ILLabel> ();
+
+		public Dictionary<int,int>   fieldStatChangedPos = new Dictionary<int,int>();
+		public Dictionary<int,int>   localStatChangedPos = new Dictionary<int,int>();
+	
 		private int maxCodePos = -1;
 		public void reset()
 		{
@@ -45,6 +50,7 @@ namespace ICSharpCode.Decompiler.ILAst
 			fieldStat = 0;
 			localDisposeFlag = 0;
 			localReturnValue = 0;
+			localStatChangedPos.Clear ();
 		}
 
 		public bool addNewNode(ILNode node, int pos)
@@ -179,46 +185,101 @@ namespace ICSharpCode.Decompiler.ILAst
 
 
 			// stloc(var_1, newobj(..)
-			ILVariable var1;
+			ILVariable var1=null;
 			if (!method.Body[0].Match(ILCode.Stloc, out var1, out newObj))
 				return false;
 			if (!MatchEnumeratorCreationNewObj(newObj, out enumeratorCtor))
 				return false;
-			
-			int i;
-			for (i = 1; i < method.Body.Count; i++) {
-				// stfld(..., ldloc(var_1), ldloc(parameter))
-				FieldReference storedField;
-				ILExpression ldloc, loadParameter;
-				if (!method.Body[i].Match(ILCode.Stfld, out storedField, out ldloc, out loadParameter))
-					break;
-				ILVariable loadedVar, loadedArg;
-				if (!ldloc.Match(ILCode.Ldloc, out loadedVar) || !loadParameter.Match(ILCode.Ldloc, out loadedArg))
+
+			ILVariable var2=null;
+			for (int i = 1; i < method.Body.Count; i++) {
+				ILExpression expr = method.Body [i] as ILExpression;
+				if (expr==null) {
 					return false;
-				storedField = GetFieldDefinition(storedField);
-				if (loadedVar != var1 || storedField == null || !loadedArg.IsParameter)
-					return false;
-				fieldToParameterMap[(FieldDefinition)storedField] = loadedArg;
-			}
-			ILVariable var2;
-			ILExpression ldlocForStloc2;
-			if (i < method.Body.Count && method.Body[i].Match(ILCode.Stloc, out var2, out ldlocForStloc2)) {
-				// stloc(var_2, ldloc(var_1))
-				if (ldlocForStloc2.Code != ILCode.Ldloc || ldlocForStloc2.Operand != var1)
-					return false;
-				i++;
-			} else {
-				// the compiler might skip the above instruction in release builds; in that case, it directly returns stloc.Operand
-				var2 = var1;
-			}
-			ILExpression retArg;
-			if (i < method.Body.Count && method.Body[i].Match(ILCode.Ret, out retArg)) {
-				// ret(ldloc(var_2))
-				if (retArg.Code == ILCode.Ldloc && retArg.Operand == var2) {
-					return true;
 				}
+
+				switch (expr.Code) {
+				case ILCode.Stloc:
+					if (expr.Arguments [0].Code == ILCode.Ldloc && expr.Arguments [0].Operand == var1) {
+						var2 = expr.Operand as ILVariable;
+					}
+					break;
+				case ILCode.Stfld:
+					if (expr.Arguments [0].Code == ILCode.Ldloc && (expr.Arguments [0].Operand == var1 || expr.Arguments [0].Operand == var2 )
+					) {
+						FieldReference f = expr.Operand as FieldReference;
+						if (f != null && f.Name=="$PC") {
+							if (expr.Arguments [1].Code != ILCode.Ldc_I4) {
+								return false;
+							}
+							this.initPCValue = (int)expr.Arguments [1].Operand;
+						}
+					} else {
+						return false;
+					}
+						
+
+					break;
+				case ILCode.Ldloc:
+					if (expr.Operand != var1) {
+						return false;
+					}
+					break;
+
+				case ILCode.Ret:
+					if (expr.Arguments.Count == 0)
+						return false;
+					if (
+						!(expr.Arguments[0] is ILExpression)
+						|| expr.Arguments[0].Code!= ILCode.Ldloc
+						|| (expr.Arguments[0].Operand != var1 &&  expr.Arguments[0].Operand != var2) 
+
+					) {
+						return false;
+					}
+					 
+					break;
+				default:
+					return false;
+				}
+
 			}
-			return false;
+			return true;
+
+//			int i;
+//			for (i = 1; i < method.Body.Count; i++) {
+//				// stfld(..., ldloc(var_1), ldloc(parameter))
+//				FieldReference storedField;
+//				ILExpression ldloc, loadParameter;
+//				if (!method.Body[i].Match(ILCode.Stfld, out storedField, out ldloc, out loadParameter))
+//					break;
+//				ILVariable loadedVar, loadedArg;
+//				if (!ldloc.Match(ILCode.Ldloc, out loadedVar) || !loadParameter.Match(ILCode.Ldloc, out loadedArg))
+//					return false;
+//				storedField = GetFieldDefinition(storedField);
+//				if (loadedVar != var1 || storedField == null || !loadedArg.IsParameter)
+//					return false;
+//				fieldToParameterMap[(FieldDefinition)storedField] = loadedArg;
+//			}
+//			ILVariable var2;
+//			ILExpression ldlocForStloc2;
+//			if (i < method.Body.Count && method.Body[i].Match(ILCode.Stloc, out var2, out ldlocForStloc2)) {
+//				// stloc(var_2, ldloc(var_1))
+//				if (ldlocForStloc2.Code != ILCode.Ldloc || ldlocForStloc2.Operand != var1)
+//					return false;
+//				i++;
+//			} else {
+//				// the compiler might skip the above instruction in release builds; in that case, it directly returns stloc.Operand
+//				var2 = var1;
+//			}
+//			ILExpression retArg;
+//			if (i < method.Body.Count && method.Body[i].Match(ILCode.Ret, out retArg)) {
+//				// ret(ldloc(var_2))
+//				if (retArg.Code == ILCode.Ldloc && retArg.Operand == var2) {
+//					return true;
+//				}
+//			}
+			//return false;
 		}
 		
 		static FieldDefinition GetFieldDefinition(FieldReference field)
@@ -595,37 +656,41 @@ namespace ICSharpCode.Decompiler.ILAst
 		{
 
 			int m = start;
-	
-		
+
+
 			while (m < vm.usefulList.Count)
 			{
 				ILNode node = vm.usefulList [m];
 				bool skipNode = false;
 				bool jumpped  = false;
-			
 				if (node is ILExpression) {
 					ILExpression expr = node as ILExpression;
 					if (expr.Code == ILCode.Switch) {
-						ILExpression pendingSwitchExpr = null;
 						int pendingSwitchExprJumpLableIndex = -1;
 						bool isStateSwithPending = false;
-
+						int finalStatVal = 0;
 
 						if (expr.Arguments [0].Code == ILCode.Ldloc && expr.Arguments [0].Operand == vm.statILVariable) {
 							isStateSwithPending = true;
 							pendingSwitchExprJumpLableIndex = vm.localStat;
-						} else if (expr.Arguments [0].Code == ILCode.Ldfld && expr.Arguments [0].Operand == this.stateField) {
+							finalStatVal =  vm.localStat;
+						} else if (expr.Arguments [0].Code == ILCode.Ldfld && 
+							GetFieldDefinition ( expr.Arguments [0].Operand as FieldReference)  == this.stateField) {
 							isStateSwithPending = true;
 							pendingSwitchExprJumpLableIndex = vm.fieldStat;
+							finalStatVal =  vm.fieldStat;
 						} else if (expr.Arguments [0].Code == ILCode.Sub) {
 							ILExpression iLExpression10 = expr.Arguments [0];
 							if (iLExpression10.Arguments [0].Code == ILCode.Ldloc && iLExpression10.Arguments [0].Operand == vm.statILVariable) {
 								if (iLExpression10.Arguments [1].Code == ILCode.Ldc_I4) {
+									finalStatVal =  vm.localStat;
 									pendingSwitchExprJumpLableIndex = vm.localStat - (int)iLExpression10.Arguments [1].Operand;
 									isStateSwithPending = true;
 								}
-							} else if (iLExpression10.Arguments [0].Code == ILCode.Ldfld && iLExpression10.Arguments [0].Operand == this.stateField) {
+							} else if (iLExpression10.Arguments [0].Code == ILCode.Ldfld &&
+								GetFieldDefinition ( iLExpression10.Arguments [0].Operand as FieldReference) == this.stateField) {
 								if (iLExpression10.Arguments [1].Code == ILCode.Ldc_I4) {
+									finalStatVal =  vm.fieldStat;
 									pendingSwitchExprJumpLableIndex = vm.fieldStat - (int)iLExpression10.Arguments [1].Operand;
 									isStateSwithPending = true;
 								}
@@ -646,7 +711,8 @@ namespace ICSharpCode.Decompiler.ILAst
 							} else {
 								if (m + 1 >= vm.usefulList.Count
 								    || !(vm.usefulList [m + 1] is ILExpression)
-								    || (vm.usefulList [m + 1] as ILExpression).Code != ILCode.Br) {
+								    || (vm.usefulList [m + 1] as ILExpression).Code != ILCode.Br) 
+								{
 									//impossible 
 									throw new SymbolicAnalysisFailedException (); 
 								}
@@ -655,7 +721,32 @@ namespace ICSharpCode.Decompiler.ILAst
 							}
 
 							//convert switch to jmp
-							vm.addCreateNewNode (new ILExpression (ILCode.Br, jmpLabel),m);
+
+
+							if (pendingSwitchExprJumpLableIndex >= 0 &&
+							    pendingSwitchExprJumpLableIndex < lbList.Length) {
+								bool addedJump = false;
+								if (expr == vm.firstStatSwitchExpr) {
+										
+									if (vm.fieldStatChangedPos.ContainsKey (finalStatVal)) {
+										int stateStartPos = vm.fieldStatChangedPos [finalStatVal];
+										addedJump = vm.addNewNode (new ILExpression (ILCode.Br, jmpLabel), stateStartPos);
+									} 
+									vm.localStatChangedPos.Clear ();
+								} else {
+									if (vm.localStatChangedPos.ContainsKey (finalStatVal)) {
+										int stateStartPos = vm.localStatChangedPos [finalStatVal];
+										addedJump = vm.addNewNode (new ILExpression (ILCode.Br, jmpLabel), stateStartPos);
+									}
+								}
+								if (!addedJump) {
+									if (!vm.addNewNode (new ILExpression (ILCode.Br, jmpLabel), m)) {
+										//throw new SymbolicAnalysisFailedException (); 
+									}
+								}
+							} else {
+								vm.addNewNode (new ILExpression (ILCode.Br, jmpLabel), m + 1);
+							}
 
 							m = vm.labelMaping [jmpLabel];
 							skipNode = true;
@@ -685,13 +776,8 @@ namespace ICSharpCode.Decompiler.ILAst
 						}
 
 						int lbPos = vm.labelMaping [lb];
-						if (lbPos < m) {
-							ScanLine (vm, lbPos);
-							vm.addNewNode (node, m);
-						} else {
-							vm.addNewNode (node, m);
-							ScanLine (vm, lbPos);
-						}
+						vm.addNewNode (node, m);
+						ScanLine (vm, lbPos);
 					
 						return;
 
@@ -704,13 +790,12 @@ namespace ICSharpCode.Decompiler.ILAst
 						}
 
 						int lbPos = vm.labelMaping [lb];
+						vm.addNewNode (node, m);
 						if (lbPos < m) {
 							ScanLine (vm, lbPos);
-							vm.addNewNode (node, m);
 							ScanLine (vm, m + 1);
 						} else {
 							ScanLine (vm, m + 1);
-							vm.addNewNode (node, m);
 							ScanLine (vm, lbPos);
 						}
 
@@ -720,9 +805,12 @@ namespace ICSharpCode.Decompiler.ILAst
 						if (expr.Operand == vm.statILVariable) {
 							if (expr.Arguments [0].Code == ILCode.Ldc_I4) {
 								vm.localStat = (int)expr.Arguments [0].Operand;
+								vm.localStatChangedPos[vm.localStat] = m;
 							} else if (expr.Arguments [0].Code == ILCode.Ldfld
-							           && expr.Arguments [0].Operand == stateField) {
+								&& GetFieldDefinition ( expr.Arguments [0].Operand as FieldReference)  == stateField) {
 								vm.localStat = vm.fieldStat;
+								//mark the local state for use when we process jump
+								vm.localStatChangedPos[vm.localStat] = m;
 							} else {
 								throw new SymbolicAnalysisFailedException ();
 							}
@@ -748,13 +836,16 @@ namespace ICSharpCode.Decompiler.ILAst
 									throw new SymbolicAnalysisFailedException ();
 								}
 								vm.fieldStat = (int)expr.Arguments [1].Operand;
+								vm.fieldStatChangedPos [vm.fieldStat] = m;
 								skipNode = true;
 							} 
 							else if (YieldReturnDecompiler.GetFieldDefinition (expr.Operand as FieldReference) == this.currentField)
 							{
+								//state should change
 								vm.addNewNode (new ILExpression (ILCode.YieldReturn, null, expr.Arguments [1]),m);
+
 								skipNode = true;
-								return;
+
 							}
 						}
 					} else if (expr.Code == ILCode.Ret) {
@@ -809,7 +900,7 @@ namespace ICSharpCode.Decompiler.ILAst
 //			ILVariable diposeFlagVar=null;
 			ILLabel lastLabel = null;
 		
-			//phase , scan once to retrive pc , current , pc's local, usage ILNode
+			//can once to retrive pc , current , pc's local, usage ILNode
 			YieldVMStat vm = new YieldVMStat();
 		
 			for (int i = 0; i < ilMethod.Body.Count; i++) {
@@ -822,7 +913,7 @@ namespace ICSharpCode.Decompiler.ILAst
 						//if arments is stateField;
 						//set statelocal = local;
 						if (vm.statILVariable== null && expr.Arguments [0].Code == ILCode.Ldfld
-						    && expr.Arguments [0].Operand == stateField)
+							&&GetFieldDefinition ( expr.Arguments [0].Operand as FieldReference)   == stateField)
 						{
 							vm.statILVariable = expr.Operand as ILVariable;
 						}
@@ -924,7 +1015,7 @@ namespace ICSharpCode.Decompiler.ILAst
 						   ||
 
 						   (expr.Arguments [0].Code == ILCode.Ldfld
-						   && expr.Arguments [0].Operand == stateField)) {
+								&&GetFieldDefinition ( expr.Arguments [0].Operand as FieldReference)  == stateField)) {
 						
 							foreach (ILLabel lb in (expr.Operand as ILLabel[])) {
 								vm.fistStateSwitchLabelList.Add (lb);
@@ -946,6 +1037,7 @@ namespace ICSharpCode.Decompiler.ILAst
 					vm.labelMaping [(node as ILLabel)] = i;
 				}
 			}
+
 
 
 			//scan all first swith stat 
@@ -975,7 +1067,7 @@ namespace ICSharpCode.Decompiler.ILAst
 						vm.fieldStat =i-1;
 					}
 				}
-
+				vm.scanningStat = vm.fieldStat;
 				ScanLine (vm,0);
 			}
 
@@ -1142,7 +1234,7 @@ namespace ICSharpCode.Decompiler.ILAst
 					if (field != null) {
 						switch (expr.Code) {
 							case ILCode.Ldfld:
-								if (expr.Arguments[0].MatchThis()) {
+								if (expr.Arguments[0].MatchThis() ) {
 									expr.Code = ILCode.Ldloc;
 									if (fieldToParameterMap.ContainsKey(field)) {
 										expr.Operand = fieldToParameterMap[field];
@@ -1170,7 +1262,12 @@ namespace ICSharpCode.Decompiler.ILAst
 										expr.Operand = fieldToParameterMap[field];
 									} else {
 										expr.Operand = fieldToLocalMap[field];
+										ILVariable vvtmp = (expr.Operand as ILVariable);
+										if (vvtmp.Name == "<>f__this")
+											expr.Operand = expr.Arguments [0].Operand;
 									}
+
+
 									expr.Arguments.Clear();
 								}
 								break;
