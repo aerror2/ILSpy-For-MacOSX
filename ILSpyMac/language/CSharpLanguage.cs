@@ -639,11 +639,15 @@ namespace ICSharpCode.ILSpy
 		#region WriteCodeFilesInProject
 		bool IncludeTypeWhenDecompilingProject(TypeDefinition type, DecompilationOptions options)
 		{
+			
+
 			if (type.Name == "<Module>" || AstBuilder.MemberIsHidden(type, options.DecompilerSettings)
 			)
 				return false;
 			if (type.Namespace == "XamlGeneratedNamespace" && type.Name == "GeneratedInternalTypeHelper")
 				return false;
+
+
 			return true;
 		}
 
@@ -714,6 +718,14 @@ namespace ICSharpCode.ILSpy
 //			delegate(IGrouping<string, TypeDefinition> file) 
 			foreach(IGrouping<string, TypeDefinition> file in files)
 			{
+
+				if (options.IncludedClassName != null ) {
+					if (!file.Key.Contains (options.IncludedClassName)) {
+					//	Console.WriteLine (file.Key);
+						continue;
+					}
+				}
+
 				using (StreamWriter w = new StreamWriter(Path.Combine(options.SaveAsProjectDirectory, file.Key))) {
 					AstBuilder codeDomBuilder = CreateAstBuilder(options, currentModule: module);
 					foreach (TypeDefinition type in file) {

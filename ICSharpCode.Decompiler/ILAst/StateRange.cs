@@ -266,8 +266,19 @@ namespace ICSharpCode.Decompiler.ILAst
 					if ( expr.Arguments [0].MatchThis () && (expr.Operand as FieldReference).Name=="$PC") {
 						break;
 					}
-
-					default:
+                    else
+                    {
+                        if (mode == StateRangeAnalysisMode.IteratorDispose)
+                        {
+                            throw new SymbolicAnalysisFailedException();
+                        }
+                        else
+                        {
+                            return i;
+                        }
+                    }
+                    break;
+				default:
 						if (mode == StateRangeAnalysisMode.IteratorDispose) {
 							throw new SymbolicAnalysisFailedException();
 						} else {

@@ -787,11 +787,12 @@ namespace ICSharpCode.Decompiler.ILAst
 								jumplist.Add (vm.labelMaping [tmp]);
 							}
 							jumplist.Add (m + 1); // the default pos;
-					
-							vm.addNewNode (node, m);
+
+                            if (!vm.addNewNode(node, m))
+                                return;
 							skipNode = true;
 							foreach (int tmp in jumplist) {
-								ScanLine (vm, tmp, stop);
+								ScanLine (vm, tmp, vm.usefulList.Count);
 							}
 							return;
 						}
@@ -804,11 +805,12 @@ namespace ICSharpCode.Decompiler.ILAst
 						}
 
 						int lbPos = vm.labelMaping [lb];
-						vm.addNewNode (node, m);
+                        if (!vm.addNewNode(node, m))
+                            return;
 						if (lbPos < m)
 							ScanLine (vm, lbPos, m);
 						else
-							ScanLine (vm, lbPos, stop);
+                            ScanLine(vm, lbPos, vm.usefulList.Count);
 					
 						return;
 
@@ -824,14 +826,15 @@ namespace ICSharpCode.Decompiler.ILAst
 						}
 
 						int lbPos = vm.labelMaping [lb];
-						vm.addNewNode (node, m);
+                        if (!vm.addNewNode(node, m))
+                            return;
 						if (lbPos < m) {
 							ScanLine (vm, lbPos, m);
-							ScanLine (vm, m + 1, stop);
+                            ScanLine(vm, m + 1, vm.usefulList.Count);
 
 						} else {
 							ScanLine (vm, m + 1, lbPos);
-							ScanLine (vm, lbPos, stop);
+                            ScanLine(vm, lbPos, vm.usefulList.Count);
 						}
 
 						return;
@@ -935,7 +938,10 @@ namespace ICSharpCode.Decompiler.ILAst
 
 
 				if (!skipNode) {
-					vm.addNewNode(node,m);
+					if(!vm.addNewNode(node,m))
+                    {
+                        return;
+                    }
 				}
 				if (!jumpped) {
 					m++;
@@ -1179,7 +1185,9 @@ namespace ICSharpCode.Decompiler.ILAst
 //			ScanLine (vm, 0);
 
 			createdBody = vm.outputNewBody ();
-
+			if (createdBody.Count == 28) {
+				Console.WriteLine ("xxxx size " + createdBody.Count);
+			}
 			Console.WriteLine ("create size " + createdBody.Count);
 
 		}

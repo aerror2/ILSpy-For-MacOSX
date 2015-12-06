@@ -63,6 +63,7 @@ namespace ICSharpCode.ILSpy
 
 		public AssemblyList assenmlyList{ get; set; }
 
+		public String     IncludedClassName{ get; set;}
 //		public DecompilationOptions()
 //		{
 //			this.DecompilerSettings = DecompilerSettingsPanel.CurrentDecompilerSettings;
