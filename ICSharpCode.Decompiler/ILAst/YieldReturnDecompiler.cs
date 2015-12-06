@@ -25,6 +25,12 @@ using Mono.Cecil;
 namespace ICSharpCode.Decompiler.ILAst
 {
 
+	public class ILTryCatchBlockInfo
+	{
+		public ILTryCatchBlock blk;
+		public List<ILNode>    nodelistRef;
+	}
+
 	public class YieldVMStat
 	{
 		public int scanningStat;
@@ -42,7 +48,11 @@ namespace ICSharpCode.Decompiler.ILAst
 
 		public Dictionary<int,int>   fieldStatChangedPos = new Dictionary<int,int>();
 		public Dictionary<int,int>   localStatChangedPos = new Dictionary<int,int>();
-	
+		public Dictionary<int,ILTryCatchBlockInfo> tryBlockMapping = new Dictionary<int,ILTryCatchBlockInfo> ();
+
+
+		public HashSet<int> posWillGotoReturn = new HashSet<int> ();
+		public bool markingLocalChangePos = false;
 		private int maxCodePos = -1;
 		public void reset()
 		{
@@ -83,14 +93,29 @@ namespace ICSharpCode.Decompiler.ILAst
 		{
 			List<ILNode> b = new List<ILNode> ();
 			ILNode lastNode = null; 
+			HashSet<ILTryCatchBlock> addedTryCatchBlock = new HashSet<ILTryCatchBlock> ();
+
 			for (int i = 0; i <= maxCodePos; i++) {
 				if (this.newBody.ContainsKey (i)) {
+
 					List<ILExpression> args = new List<ILExpression>();
 					if (lastNode is ILLabel && this.newBody [i] is ILLabel) {
 						b.Add (new ILExpression (ILCode.Nop, null, args));
 					}
 					lastNode = this.newBody [i];
-					b.Add (lastNode);
+
+					if (this.tryBlockMapping.ContainsKey (i)) {
+						
+						if (!addedTryCatchBlock.Contains(this.tryBlockMapping [i].blk)) 
+						{
+							addedTryCatchBlock.Add (this.tryBlockMapping [i].blk);
+							b.Add (this.tryBlockMapping [i].blk);
+						}
+						this.tryBlockMapping [i].nodelistRef.Add (lastNode);
+					} else {
+						b.Add (lastNode);
+					}
+
 				}
 			}
 
@@ -643,13 +668,14 @@ namespace ICSharpCode.Decompiler.ILAst
 
 			return false;
 		}
-		void ScanLine(YieldVMStat vm, int start)
+		void ScanLine(YieldVMStat vm, int start, int stop)
 		{
 
 			int m = start;
 
 
-			while (m < vm.usefulList.Count)
+
+			while (m < stop)
 			{
 				ILNode node = vm.usefulList [m];
 				bool skipNode = false;
@@ -657,6 +683,7 @@ namespace ICSharpCode.Decompiler.ILAst
 				if (node is ILExpression) {
 					ILExpression expr = node as ILExpression;
 					if (expr.Code == ILCode.Switch) {
+
 						int pendingSwitchExprJumpLableIndex = -1;
 						bool isStateSwithPending = false;
 						int finalStatVal = 0;
@@ -664,46 +691,45 @@ namespace ICSharpCode.Decompiler.ILAst
 						if (expr.Arguments [0].Code == ILCode.Ldloc && expr.Arguments [0].Operand == vm.statILVariable) {
 							isStateSwithPending = true;
 							pendingSwitchExprJumpLableIndex = vm.localStat;
-							finalStatVal =  vm.localStat;
-						} else if (expr.Arguments [0].Code == ILCode.Ldfld && 
-							GetFieldDefinition ( expr.Arguments [0].Operand as FieldReference)  == this.stateField) {
+							finalStatVal = vm.localStat;
+						} else if (expr.Arguments [0].Code == ILCode.Ldfld &&
+						           GetFieldDefinition (expr.Arguments [0].Operand as FieldReference) == this.stateField) {
 							isStateSwithPending = true;
 							pendingSwitchExprJumpLableIndex = vm.fieldStat;
-							finalStatVal =  vm.fieldStat;
+							finalStatVal = vm.fieldStat;
 						} else if (expr.Arguments [0].Code == ILCode.Sub) {
 							ILExpression iLExpression10 = expr.Arguments [0];
 							if (iLExpression10.Arguments [0].Code == ILCode.Ldloc && iLExpression10.Arguments [0].Operand == vm.statILVariable) {
 								if (iLExpression10.Arguments [1].Code == ILCode.Ldc_I4) {
-									finalStatVal =  vm.localStat;
+									finalStatVal = vm.localStat;
 									pendingSwitchExprJumpLableIndex = vm.localStat - (int)iLExpression10.Arguments [1].Operand;
 									isStateSwithPending = true;
 								}
 							} else if (iLExpression10.Arguments [0].Code == ILCode.Ldfld &&
-								GetFieldDefinition ( iLExpression10.Arguments [0].Operand as FieldReference) == this.stateField) {
+							           GetFieldDefinition (iLExpression10.Arguments [0].Operand as FieldReference) == this.stateField) {
 								if (iLExpression10.Arguments [1].Code == ILCode.Ldc_I4) {
-									finalStatVal =  vm.fieldStat;
+									finalStatVal = vm.fieldStat;
 									pendingSwitchExprJumpLableIndex = vm.fieldStat - (int)iLExpression10.Arguments [1].Operand;
 									isStateSwithPending = true;
 								}
 							}
 						}
 
-					
+						
 
 
 						if (isStateSwithPending) {
 							
 
 							ILLabel jmpLabel = null;
-							ILLabel[] lbList = expr.Operand as ILLabel [];
+							ILLabel[] lbList = expr.Operand as ILLabel[];
 							if (pendingSwitchExprJumpLableIndex >= 0 &&
-								pendingSwitchExprJumpLableIndex < lbList.Length) {
-								jmpLabel =lbList [pendingSwitchExprJumpLableIndex];
+							    pendingSwitchExprJumpLableIndex < lbList.Length) {
+								jmpLabel = lbList [pendingSwitchExprJumpLableIndex];
 							} else {
 								if (m + 1 >= vm.usefulList.Count
 								    || !(vm.usefulList [m + 1] is ILExpression)
-								    || (vm.usefulList [m + 1] as ILExpression).Code != ILCode.Br) 
-								{
+								    || (vm.usefulList [m + 1] as ILExpression).Code != ILCode.Br) {
 									//impossible 
 									throw new SymbolicAnalysisFailedException (); 
 								}
@@ -718,15 +744,17 @@ namespace ICSharpCode.Decompiler.ILAst
 							    pendingSwitchExprJumpLableIndex < lbList.Length) {
 								bool addedJump = false;
 								if (expr == vm.firstStatSwitchExpr) {
-										
-									if (vm.fieldStatChangedPos.ContainsKey (finalStatVal)) {
+									addedJump = vm.addNewNode (new ILExpression (ILCode.Br, jmpLabel), m);
+									if (!addedJump && vm.fieldStatChangedPos.ContainsKey (finalStatVal)) {
 										int stateStartPos = vm.fieldStatChangedPos [finalStatVal];
 										addedJump = vm.addNewNode (new ILExpression (ILCode.Br, jmpLabel), stateStartPos);
 									} 
 									vm.localStatChangedPos.Clear ();
 								} else {
+									
 									if (vm.localStatChangedPos.ContainsKey (finalStatVal)) {
 										int stateStartPos = vm.localStatChangedPos [finalStatVal];
+
 										addedJump = vm.addNewNode (new ILExpression (ILCode.Br, jmpLabel), stateStartPos);
 									}
 								}
@@ -739,22 +767,31 @@ namespace ICSharpCode.Decompiler.ILAst
 								vm.addNewNode (new ILExpression (ILCode.Br, jmpLabel), m + 1);
 							}
 
+							vm.localStatChangedPos.Clear ();
+							vm.markingLocalChangePos = false;
+
+
 							m = vm.labelMaping [jmpLabel];
 							skipNode = true;
 							jumpped = true;
 						} else {
 							
+							if (vm.markingLocalChangePos) {
+								vm.localStatChangedPos.Clear ();
+								vm.markingLocalChangePos = false;
+							}
+
 							List<int> jumplist = new List<int> ();
-							ILLabel[] lbList = expr.Operand as ILLabel [];
+							ILLabel[] lbList = expr.Operand as ILLabel[];
 							foreach (ILLabel tmp in lbList) {
-								jumplist.Add (vm.labelMaping[tmp]);
+								jumplist.Add (vm.labelMaping [tmp]);
 							}
 							jumplist.Add (m + 1); // the default pos;
 					
 							vm.addNewNode (node, m);
 							skipNode = true;
 							foreach (int tmp in jumplist) {
-								ScanLine (vm, tmp);
+								ScanLine (vm, tmp, stop);
 							}
 							return;
 						}
@@ -768,12 +805,18 @@ namespace ICSharpCode.Decompiler.ILAst
 
 						int lbPos = vm.labelMaping [lb];
 						vm.addNewNode (node, m);
-						ScanLine (vm, lbPos);
+						if (lbPos < m)
+							ScanLine (vm, lbPos, m);
+						else
+							ScanLine (vm, lbPos, stop);
 					
 						return;
 
 					} else if (isFlowControlCode (expr.Code)) {
-
+						if (vm.markingLocalChangePos) {
+							vm.localStatChangedPos.Clear ();
+							vm.markingLocalChangePos = false;
+						}
 						ILLabel lb = expr.Operand as ILLabel;
 						if (lb == null) {
 							//impossible 
@@ -783,34 +826,41 @@ namespace ICSharpCode.Decompiler.ILAst
 						int lbPos = vm.labelMaping [lb];
 						vm.addNewNode (node, m);
 						if (lbPos < m) {
-							ScanLine (vm, lbPos);
-							ScanLine (vm, m + 1);
+							ScanLine (vm, lbPos, m);
+							ScanLine (vm, m + 1, stop);
+
 						} else {
-							ScanLine (vm, m + 1);
-							ScanLine (vm, lbPos);
+							ScanLine (vm, m + 1, lbPos);
+							ScanLine (vm, lbPos, stop);
 						}
 
 						return;
 
 					} else if (expr.Code == ILCode.Stloc) {
 						if (expr.Operand == vm.statILVariable) {
+							
 							if (expr.Arguments [0].Code == ILCode.Ldc_I4) {
 								vm.localStat = (int)expr.Arguments [0].Operand;
-								vm.localStatChangedPos[vm.localStat] = m;
+								vm.localStatChangedPos [vm.localStat] = m;
 							} else if (expr.Arguments [0].Code == ILCode.Ldfld
-								&& GetFieldDefinition ( expr.Arguments [0].Operand as FieldReference)  == stateField) {
+							           && GetFieldDefinition (expr.Arguments [0].Operand as FieldReference) == stateField) {
+
+
 								vm.localStat = vm.fieldStat;
 								//mark the local state for use when we process jump
-								vm.localStatChangedPos[vm.localStat] = m;
+								vm.localStatChangedPos.Clear ();
+								vm.markingLocalChangePos = true;
+								vm.localStatChangedPos.Add (vm.localStat, m);
+
 							} else {
 								throw new SymbolicAnalysisFailedException ();
 							}
 							skipNode = true;
 						} else if (expr.Operand == vm.diposeFlagILVariable) {
-							if (expr.Arguments [0].Code != ILCode.Ldc_I4) {
-								throw new SymbolicAnalysisFailedException ();
-							}
-							vm.localDisposeFlag = (int)expr.Arguments [0].Operand;
+//							if (expr.Arguments [0].Code != ILCode.Ldc_I4) {
+//								throw new SymbolicAnalysisFailedException ();
+//							}
+//							vm.localDisposeFlag = (int)expr.Arguments [0].Operand;
 							skipNode = true;
 						} else if (expr.Operand == returnVariable) {
 							if (expr.Arguments [0].Code != ILCode.Ldc_I4) {
@@ -827,46 +877,62 @@ namespace ICSharpCode.Decompiler.ILAst
 									throw new SymbolicAnalysisFailedException ();
 								}
 								vm.fieldStat = (int)expr.Arguments [1].Operand;
-								vm.fieldStatChangedPos [vm.fieldStat] = m;
+
 								skipNode = true;
-							} 
-							else if (YieldReturnDecompiler.GetFieldDefinition (expr.Operand as FieldReference) == this.currentField)
-							{
+							} else if (YieldReturnDecompiler.GetFieldDefinition (expr.Operand as FieldReference) == this.currentField) {
 								//state should change
-								vm.addNewNode (new ILExpression (ILCode.YieldReturn, null, expr.Arguments [1]),m);
+								vm.addNewNode (new ILExpression (ILCode.YieldReturn, null, expr.Arguments [1]), m);
+
+								if (m + 1 < vm.usefulList.Count) {
+									ILExpression nextExpr = vm.usefulList [m + 1] as ILExpression;
+									if (
+										nextExpr.Code == ILCode.Stfld
+										&& YieldReturnDecompiler.GetFieldDefinition (nextExpr.Operand as FieldReference) == this.stateField) {
+										vm.fieldStat = (int)nextExpr.Arguments [1].Operand;
+										vm.fieldStatChangedPos [vm.fieldStat] = m + 1;
+
+									} else {
+										throw new SymbolicAnalysisFailedException ();
+									}
+								} else {
+									throw new SymbolicAnalysisFailedException ();
+								}
 
 								skipNode = true;
-
+								return;
 							}
 						}
 					} else if (expr.Code == ILCode.Ret) {
-						if (expr.Arguments [0].Code == ILCode.Ldloc && 
-							expr.Arguments [0].Operand == returnVariable
-						) {
+						if (expr.Arguments [0].Code == ILCode.Ldloc &&
+						    expr.Arguments [0].Operand == returnVariable) {
 							if (vm.localReturnValue == 0) {
 								skipNode = true;
-								vm.addNewNode (new ILExpression (ILCode.YieldBreak, null),m);
+								vm.addNewNode (new ILExpression (ILCode.YieldBreak, null), m);
 							} else {
 								//todo nothing.
 								skipNode = true;
+								vm.addNewNode (new ILExpression (ILCode.Ret, null, new List<ILExpression> ()), m);
 							}
 						} else if (expr.Arguments [0].Code == ILCode.Ldc_I4) {
 							int retval = (int)expr.Arguments [0].Operand;
-							if (vm.localReturnValue == 0) {
+							if (retval == 0) {
 								skipNode = true;
-								vm.addNewNode (new ILExpression (ILCode.YieldBreak, null),m);
+								vm.addNewNode (new ILExpression (ILCode.YieldBreak, null), m);
 							} else {
 								//todo nothing.
 								skipNode = true;
+								vm.addNewNode (new ILExpression (ILCode.Ret, null, new List<ILExpression> ()), m);
 							}
 						} else {
 							throw new SymbolicAnalysisFailedException ();
 						}
-						 
-						return;
+
 					}
 
+				} else if (node is ILTryCatchBlock) {
+					
 				}
+
 
 				if (!skipNode) {
 					vm.addNewNode(node,m);
@@ -903,13 +969,10 @@ namespace ICSharpCode.Decompiler.ILAst
 					case ILCode.Stloc:
 						//if arments is stateField;
 						//set statelocal = local;
-						if (vm.statILVariable== null && expr.Arguments [0].Code == ILCode.Ldfld
-							&&GetFieldDefinition ( expr.Arguments [0].Operand as FieldReference)   == stateField)
-						{
+						if (vm.statILVariable == null && expr.Arguments [0].Code == ILCode.Ldfld
+						    && GetFieldDefinition (expr.Arguments [0].Operand as FieldReference) == stateField) {
 							vm.statILVariable = expr.Operand as ILVariable;
-						}
-						else if(vm.diposeFlagILVariable==null && expr.Operand !=vm.statILVariable && expr.Arguments [0].Code == ILCode.Ldc_I4  )
-						{
+						} else if (vm.diposeFlagILVariable == null && expr.Operand != vm.statILVariable && expr.Arguments [0].Code == ILCode.Ldc_I4) {
 
 							//flag to control finally block dipose
 							vm.diposeFlagILVariable = expr.Operand as ILVariable;
@@ -918,19 +981,17 @@ namespace ICSharpCode.Decompiler.ILAst
 						break;
 					case ILCode.Ret:
 						//find out the return Jump Lable and stat
-						ILExpression retArg = expr.Arguments[0] as ILExpression;
+						ILExpression retArg = expr.Arguments [0] as ILExpression;
 
 						if (retArg.Code == ILCode.Ldloc) {
 							// a) the compiler uses a variable for returns (in debug builds, or when there are try-finally blocks)
 							returnVariable = (ILVariable)lastReturnArg.Operand;
-							returnLabel = ilMethod.Body.ElementAtOrDefault(ilMethod.Body.Count - 2) as ILLabel;
+							returnLabel = ilMethod.Body.ElementAtOrDefault (ilMethod.Body.Count - 2) as ILLabel;
 							if (returnLabel == null)
-								throw new SymbolicAnalysisFailedException();
+								throw new SymbolicAnalysisFailedException ();
 						} else {
 							// b) the compiler directly returns constants
-							if (retArg.Code != ILCode.Ldc_I4)
-
-							{
+							if (retArg.Code != ILCode.Ldc_I4) {
 								throw new SymbolicAnalysisFailedException ();
 							}
 
@@ -945,7 +1006,12 @@ namespace ICSharpCode.Decompiler.ILAst
 						break;
 					}
 					vm.usefulList.Add (expr);
-				} else if (node is ILTryCatchBlock) {
+				} else if (node is ILBasicBlock) {
+					foreach (ILNode blkNode in (node as ILBasicBlock).Body) {
+						vm.usefulList.Add (blkNode);
+					}
+				}
+				else if (node is ILTryCatchBlock) {
 					ILTryCatchBlock tryBlock = node as ILTryCatchBlock;
 					//check if a state try
 					//finally block is not null, contains dispose , fault block is null, catch block.count==0
@@ -974,7 +1040,49 @@ namespace ICSharpCode.Decompiler.ILAst
 							vm.usefulList.Add (blkNode);
 						}
 					} else {
-						vm.usefulList.Add (node);
+						
+						if (tryBlock.TryBlock != null) {
+							foreach (ILNode blkNode in tryBlock.TryBlock.Body) {
+								vm.usefulList.Add (blkNode);
+								vm.tryBlockMapping [vm.usefulList.Count - 1] = new ILTryCatchBlockInfo(){blk=tryBlock,nodelistRef=tryBlock.TryBlock.Body};
+							}
+							tryBlock.TryBlock.Body.Clear ();
+						}
+
+
+						if (tryBlock.FinallyBlock != null) {
+							foreach (ILNode blkNode in tryBlock.FinallyBlock.Body) {
+								vm.usefulList.Add (blkNode);
+								vm.tryBlockMapping [vm.usefulList.Count - 1] = new ILTryCatchBlockInfo(){blk=tryBlock,nodelistRef=tryBlock.FinallyBlock.Body};
+							}
+							tryBlock.FinallyBlock.Body.Clear ();
+						}
+
+						if (tryBlock.CatchBlocks.Count != 0) {
+							foreach (ILTryCatchBlock.CatchBlock blk in tryBlock.CatchBlocks) {
+								foreach (ILNode blkNode in blk.Body) {
+									vm.usefulList.Add (blkNode);
+									vm.tryBlockMapping [vm.usefulList.Count - 1] = new ILTryCatchBlockInfo () {
+										blk = tryBlock,
+										nodelistRef = blk.Body
+									};
+								}
+								blk.Body.Clear ();
+							}
+						}
+
+						if (tryBlock.FaultBlock != null) {
+							foreach (ILNode blkNode in tryBlock.FaultBlock.Body) {
+								vm.usefulList.Add (blkNode);
+								vm.tryBlockMapping [vm.usefulList.Count - 1] = new ILTryCatchBlockInfo(){blk=tryBlock,nodelistRef=tryBlock.FaultBlock.Body};
+							}
+							tryBlock.FaultBlock.Body.Clear ();
+						}
+
+
+
+ 						
+
 					}
 				} else if (node is ILLabel) {
 					lastLabel = node as ILLabel;
@@ -998,33 +1106,36 @@ namespace ICSharpCode.Decompiler.ILAst
 				if (node is ILExpression) {
 					ILExpression expr = node as ILExpression;
 					if (expr.Code == ILCode.Switch
-						&& vm.firstStatSwitchExpr ==null
+					    && vm.firstStatSwitchExpr == null
 					    && expr.Arguments.Count == 1) {
 						if ((expr.Arguments [0].Code == ILCode.Ldloc
-							&& expr.Arguments [0].Operand == vm.statILVariable)
+						    && expr.Arguments [0].Operand == vm.statILVariable)
 
-						   ||
+						    ||
 
-						   (expr.Arguments [0].Code == ILCode.Ldfld
-								&&GetFieldDefinition ( expr.Arguments [0].Operand as FieldReference)  == stateField)) {
+						    (expr.Arguments [0].Code == ILCode.Ldfld
+						    && GetFieldDefinition (expr.Arguments [0].Operand as FieldReference) == stateField)) {
 						
 							foreach (ILLabel lb in (expr.Operand as ILLabel[])) {
 								vm.fistStateSwitchLabelList.Add (lb);
 							}
 							vm.firstStatSwitchExpr = expr;
 							expectedSwitchFollowBr = true;
-
 						}
 					} else if (expr.Code == ILCode.Br && expectedSwitchFollowBr) {
 						expectedSwitchFollowBr = false;
 						if (initPCValue < 0) {
-							vm.fistStateSwitchLabelList.Insert (0,expr.Operand as ILLabel);
+							vm.fistStateSwitchLabelList.Insert (0, expr.Operand as ILLabel);
 						} else {
 							vm.fistStateSwitchLabelList.Add (expr.Operand as ILLabel);
 
 						}
 					}
-				} else if (node is ILLabel) {
+
+				} else if (node is ILTryCatchBlock) {
+					
+				}
+				else if (node is ILLabel) {
 					vm.labelMaping [(node as ILLabel)] = i;
 				}
 			}
@@ -1061,8 +1172,11 @@ namespace ICSharpCode.Decompiler.ILAst
 					}
 				}
 				vm.scanningStat = vm.fieldStat;
-				ScanLine (vm,0);
+				ScanLine (vm,0,vm.usefulList.Count);
 			}
+
+//			vm.fieldStat=initPCValue;
+//			ScanLine (vm, 0);
 
 			createdBody = vm.outputNewBody ();
 
