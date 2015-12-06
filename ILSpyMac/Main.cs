@@ -49,6 +49,7 @@ namespace Decomplier
 			Console.WriteLine ("       -y  Include XML documentation comments in the decompiled code. OFF  if exists this option, default ON.");
 			Console.WriteLine ("       -z  Fold braces. ON if exists this option, default OFF ");
 
+			Console.WriteLine ("       -C  class Name ");
 
 
 			Console.WriteLine (" Example:");
@@ -137,7 +138,7 @@ namespace Decomplier
 			ds.AnonymousMethods = true;
 			ds.AsyncAwait = true;
 			ds.YieldReturn = true;
-
+			string onlyDecomileClassName = null;
 			//parsing args
 			foreach (string x in args) {
 
@@ -146,6 +147,7 @@ namespace Decomplier
 					case "-n":
 					case "-l":
 					case "-t":
+					case "-C":
 						expOpt = x;
 						continue;
 					
@@ -201,6 +203,9 @@ namespace Decomplier
 						}
 						outLanguageType = x;
 
+						break;
+					case "-C":
+						onlyDecomileClassName = x;
 						break;
 					default:
 						showUsage ();
@@ -273,7 +278,7 @@ namespace Decomplier
 			decompilationOptions.FullDecompilation = true;
 			decompilationOptions.assenmlyList = asmlist;
 			decompilationOptions.DecompilerSettings = ds;
-
+			decompilationOptions.IncludedClassName = onlyDecomileClassName;
 
 			if(outLanguageType==LAN_TYPE_CSHARP)
 			{
