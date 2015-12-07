@@ -909,6 +909,31 @@ namespace ICSharpCode.Decompiler.Ast.Transforms
 				}}
 		};
 
+		static readonly PropertyDeclaration automaticPropertyPatternSetGet = new PropertyDeclaration {
+			Attributes = { new Repeat(new AnyNode()) },
+			Modifiers = Modifiers.Any,
+			ReturnType = new AnyNode(),
+			PrivateImplementationType = new OptionalNode(new AnyNode()),
+			Name = Pattern.AnyString,
+			Getter = new Accessor {
+				Attributes = { new Repeat(new AnyNode()) },
+				Modifiers = Modifiers.Any,
+				Body = new BlockStatement {
+					new ReturnStatement {
+						Expression = new AnyNode("fieldReferenceGet")
+					}
+				}
+			},
+			Setter = new Accessor {
+				Attributes = { new Repeat(new AnyNode()) },
+				Modifiers = Modifiers.Any,
+				Body = new BlockStatement {
+					new AssignmentExpression {
+						Left = new AnyNode("fieldReferenceSet"),
+						Right = new IdentifierExpression("value")
+					}
+				}}
+		};
 
 		
 		PropertyDeclaration TransformAutomaticProperties(PropertyDeclaration property)
@@ -961,21 +986,25 @@ namespace ICSharpCode.Decompiler.Ast.Transforms
 			} else {
 				
 			
-				Match mGet = automaticPropertyPatternGet.Match (property);
-				Match mSet = automaticPropertyPatternSet.Match (property);
-				if (mGet.Success && mSet.Success) {
-				
-					FieldDefinition fieldGet = mGet.Get<AstNode> ("fieldReferenceGet").Single ().Annotation<FieldReference> ().ResolveWithinSameModule ();
-					FieldDefinition fieldSet = mSet.Get<AstNode> ("fieldReferenceSet").Single ().Annotation<FieldReference> ().ResolveWithinSameModule ();
+				Match m = automaticPropertyPatternSetGet.Match (property);
+			
+				if (m.Success) {
 
-					if (fieldGet!=fieldSet || !fieldGet.IsCompilerGenerated () || fieldSet.DeclaringType != cecilProperty.DeclaringType) {
-						return null;
+					FieldDefinition fieldGet = m.Get<AstNode> ("fieldReferenceGet").Single ().Annotation<FieldReference> ().ResolveWithinSameModule ();
+					FieldDefinition fieldSet = m.Get<AstNode> ("fieldReferenceSet").Single ().Annotation<FieldReference> ().ResolveWithinSameModule ();
+
+					if (fieldGet.IsCompilerGenerated () 
+						&& fieldGet.DeclaringType == cecilProperty.DeclaringType
+						&& fieldSet.IsCompilerGenerated () 
+						&& fieldSet.DeclaringType == cecilProperty.DeclaringType
+						)
+					{
+						RemoveCompilerGeneratedAttribute (property.Getter.Attributes);
+						property.Getter.Body = null;
+					
+						RemoveCompilerGeneratedAttribute (property.Setter.Attributes);
+						property.Setter.Body = null;
 					}
-					RemoveCompilerGeneratedAttribute (property.Getter.Attributes);
-					property.Getter.Body = null;
-				
-					RemoveCompilerGeneratedAttribute (property.Setter.Attributes);
-					property.Setter.Body = null;
 
 				}
 			}
