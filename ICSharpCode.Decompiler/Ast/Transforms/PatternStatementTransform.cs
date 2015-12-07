@@ -1091,11 +1091,37 @@ namespace ICSharpCode.Decompiler.Ast.Transforms
 		EventDeclaration TransformAutomaticEvents(CustomEventDeclaration ev)
 		{
 			Match m1 = automaticEventPatternV4.Match(ev.AddAccessor);
-			if (!CheckAutomaticEventV4Match(m1, ev, true))
-				return null;
+			if (!CheckAutomaticEventV4Match (m1, ev, true)) {
+				EventDeclaration ed2 = new EventDeclaration();
+				ev.Attributes.MoveTo(ed2.Attributes);
+//				foreach (var attr in ev.AddAccessor.Attributes) {
+//					attr.AttributeTarget = "method";
+//					ed2.Attributes.Add(attr.Detach());
+//				}
+				ed2.ReturnType = ev.ReturnType.Detach();
+				ed2.Modifiers = ev.Modifiers;
+				ed2.Variables.Add(new VariableInitializer(ev.Name));
+				ed2.CopyAnnotationsFrom(ev);
+
+				EventDefinition eventDef2 = ev.Annotation<EventDefinition>();
+				if (eventDef2 != null) {
+					FieldDefinition field = eventDef2.DeclaringType.Fields.FirstOrDefault(f => f.Name == ev.Name);
+					if (field != null) {
+						ed2.AddAnnotation(field);
+						AstBuilder.ConvertAttributes(ed2, field, "field");
+					}
+				}
+
+				ev.ReplaceWith(ed2);
+				return ed2;
+
+			}
+
 			Match m2 = automaticEventPatternV4.Match(ev.RemoveAccessor);
 			if (!CheckAutomaticEventV4Match(m2, ev, false))
 				return null;
+
+
 			EventDeclaration ed = new EventDeclaration();
 			ev.Attributes.MoveTo(ed.Attributes);
 			foreach (var attr in ev.AddAccessor.Attributes) {
