@@ -1246,14 +1246,35 @@ namespace ICSharpCode.NRefactory.CSharp
 			if (typeDeclaration.ClassType == ClassType.Enum) {
 				bool first = true;
 				AstNode last = null;
-				foreach (var member in typeDeclaration.Members) {
+				int lastStatValue = 0;
+				bool canAssignedValue = true;
+				foreach (EnumMemberDeclaration member in typeDeclaration.Members) {
 					if (first) {
+						
+
 						first = false;
 					} else {
 						Comma(member, noSpaceAfterComma: true);
 						NewLine();
 					}
 					last = member;
+
+					if (canAssignedValue) {
+						if (member.Initializer.IsNull) {
+							member.Initializer = new PrimitiveExpression(lastStatValue);
+							lastStatValue++;
+						} else if (member.Initializer is PrimitiveExpression
+							&&(member.Initializer as PrimitiveExpression).Value != null
+							&& ((member.Initializer as PrimitiveExpression).Value is int)
+						) {
+							
+							lastStatValue =  (int) (member.Initializer as PrimitiveExpression).Value ;
+							lastStatValue++;
+						} else {
+							canAssignedValue = false;
+						}
+					}
+
 					member.AcceptVisitor(this);
 				}
 				if (last != null)

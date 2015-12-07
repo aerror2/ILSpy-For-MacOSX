@@ -69,8 +69,9 @@ namespace ICSharpCode.Decompiler.Ast.Transforms
 					IdentifierExpression methodIdent = (IdentifierExpression)((InvocationExpression)func).Arguments.Single();
 					MethodReference method = methodIdent.Annotation<MethodReference>();
 					if (method != null) {
-						if (HandleAnonymousMethod(objectCreateExpression, obj, method))
+						if (HandleAnonymousMethod (objectCreateExpression, obj, method)) {
 							return null;
+						}
 						// Perform the transformation to "new Action(obj.func)".
 						obj.Remove();
 						methodIdent.Remove();
@@ -154,7 +155,9 @@ namespace ICSharpCode.Decompiler.Ast.Transforms
 			subContext.CurrentMethodIsAsync = false;
 			subContext.ReservedVariableNames.AddRange(currentlyUsedVariableNames);
 			BlockStatement body = AstMethodBodyBuilder.CreateMethodBody(method, subContext, ame.Parameters);
-			TransformationPipeline.RunTransformationsUntil(body, v => v is DelegateConstruction, subContext);
+			TransformationPipeline.RunTransformationsUntil(body, 
+				v => v is DelegateConstruction, 
+				subContext);
 			body.AcceptVisitor(this, null);
 			
 			
