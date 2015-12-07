@@ -84,9 +84,11 @@ namespace ICSharpCode.NRefactory.CSharp
 		{
 			PropertyDeclaration o = other as PropertyDeclaration;
 			return o != null && MatchString(this.Name, o.Name)
-				&& this.MatchAttributesAndModifiers(o, match) && this.ReturnType.DoMatch(o.ReturnType, match)
+				&& this.MatchAttributesAndModifiers(o, match) 
+				&& this.ReturnType.DoMatch(o.ReturnType, match)
 				&& this.PrivateImplementationType.DoMatch(o.PrivateImplementationType, match)
-				&& this.Getter.DoMatch(o.Getter, match) && this.Setter.DoMatch(o.Setter, match);
+				&& this.Getter.DoMatch(o.Getter, match) 
+				&& this.Setter.DoMatch(o.Setter, match);
 		}
 	}
 }

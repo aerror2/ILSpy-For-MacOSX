@@ -1355,9 +1355,6 @@ namespace ICSharpCode.Decompiler.ILAst
 										expr.Operand = fieldToParameterMap[field];
 									} else {
 										expr.Operand = fieldToLocalMap[field];
-//										ILVariable vvtmp = (expr.Operand as ILVariable);
-//										if (vvtmp.Name == "<>f__this")
-//											expr.Operand = expr.Arguments [0].Operand;
 									}
 									expr.Arguments.Clear();
 								}
@@ -1369,9 +1366,6 @@ namespace ICSharpCode.Decompiler.ILAst
 										expr.Operand = fieldToParameterMap[field];
 									} else {
 										expr.Operand = fieldToLocalMap[field];
-//										ILVariable vvtmp = (expr.Operand as ILVariable);
-//										if (vvtmp.Name == "<>f__this")
-//											expr.Operand = expr.Arguments [0].Operand;
 									
 									}
 									expr.Arguments.RemoveAt(0);
@@ -1384,9 +1378,6 @@ namespace ICSharpCode.Decompiler.ILAst
 										expr.Operand = fieldToParameterMap[field];
 									} else {
 										expr.Operand = fieldToLocalMap[field];
-//										ILVariable vvtmp = (expr.Operand as ILVariable);
-//										if (vvtmp.Name == "<>f__this")
-//											expr.Operand = expr.Arguments [0].Operand;
 									}
 
 

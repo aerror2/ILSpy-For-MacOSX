@@ -875,7 +875,7 @@ namespace ICSharpCode.Decompiler.Ast.Transforms
 		#endregion
 		
 		#region Automatic Properties
-		static readonly PropertyDeclaration automaticPropertyPattern = new PropertyDeclaration {
+		static readonly PropertyDeclaration automaticPropertyPatternGet = new PropertyDeclaration {
 			Attributes = { new Repeat(new AnyNode()) },
 			Modifiers = Modifiers.Any,
 			ReturnType = new AnyNode(),
@@ -886,35 +886,97 @@ namespace ICSharpCode.Decompiler.Ast.Transforms
 				Modifiers = Modifiers.Any,
 				Body = new BlockStatement {
 					new ReturnStatement {
-						Expression = new AnyNode("fieldReference")
+						Expression = new AnyNode("fieldReferenceGet")
 					}
 				}
-			},
+			}
+		};
+
+		static readonly PropertyDeclaration automaticPropertyPatternSet = new PropertyDeclaration {
+			Attributes = { new Repeat(new AnyNode()) },
+			Modifiers = Modifiers.Any,
+			ReturnType = new AnyNode(),
+			PrivateImplementationType = new OptionalNode(new AnyNode()),
+			Name = Pattern.AnyString,
 			Setter = new Accessor {
 				Attributes = { new Repeat(new AnyNode()) },
 				Modifiers = Modifiers.Any,
 				Body = new BlockStatement {
 					new AssignmentExpression {
-						Left = new Backreference("fieldReference"),
+						Left = new AnyNode("fieldReferenceSet"),
 						Right = new IdentifierExpression("value")
 					}
-				}}};
+				}}
+		};
+
+
 		
 		PropertyDeclaration TransformAutomaticProperties(PropertyDeclaration property)
 		{
 			PropertyDefinition cecilProperty = property.Annotation<PropertyDefinition>();
-			if (cecilProperty == null || cecilProperty.GetMethod == null || cecilProperty.SetMethod == null)
+
+			if (cecilProperty == null )
 				return null;
-			if (!(cecilProperty.GetMethod.IsCompilerGenerated() && cecilProperty.SetMethod.IsCompilerGenerated()))
+			if (cecilProperty.GetMethod == null && cecilProperty.SetMethod == null) {
 				return null;
-			Match m = automaticPropertyPattern.Match(property);
-			if (m.Success) {
-				FieldDefinition field = m.Get<AstNode>("fieldReference").Single().Annotation<FieldReference>().ResolveWithinSameModule();
-				if (field.IsCompilerGenerated() && field.DeclaringType == cecilProperty.DeclaringType) {
-					RemoveCompilerGeneratedAttribute(property.Getter.Attributes);
-					RemoveCompilerGeneratedAttribute(property.Setter.Attributes);
-					property.Getter.Body = null;
+			}
+
+
+			if (cecilProperty.GetMethod!=null && !cecilProperty.GetMethod.IsCompilerGenerated())
+				return null;
+			
+				
+			if (cecilProperty.SetMethod!=null && !cecilProperty.SetMethod.IsCompilerGenerated())
+				return null;
+			
+
+			if (cecilProperty.GetMethod == null && cecilProperty.SetMethod != null) {
+				Console.WriteLine ("cecilProperty.GetMethod == null   && cecilProperty.SetMethod != null ");
+				Match mSet = automaticPropertyPatternSet.Match (property);
+				if (mSet.Success) {
+					FieldDefinition fieldSet = mSet.Get<AstNode> ("fieldReferenceSet").Single ().Annotation<FieldReference> ().ResolveWithinSameModule ();
+					if (!fieldSet.IsCompilerGenerated () || fieldSet.DeclaringType != cecilProperty.DeclaringType) {
+						return null;
+					}
+					RemoveCompilerGeneratedAttribute (property.Setter.Attributes);
 					property.Setter.Body = null;
+					property.Getter = new Accessor ();
+				}
+
+			} else if (cecilProperty.GetMethod != null && cecilProperty.SetMethod == null) {
+
+				Console.WriteLine ("cecilProperty.GetMethod != null && cecilProperty.SetMethod == null)");
+				Match mGet = automaticPropertyPatternGet.Match (property);
+				if (mGet.Success) {
+					FieldDefinition fieldGet = mGet.Get<AstNode> ("fieldReferenceGet").Single ().Annotation<FieldReference> ().ResolveWithinSameModule ();
+					if (!fieldGet.IsCompilerGenerated () || fieldGet.DeclaringType != cecilProperty.DeclaringType) {
+						return null;
+					}
+
+					RemoveCompilerGeneratedAttribute (property.Getter.Attributes);
+					property.Getter.Body = null;
+					property.Setter = new Accessor ();
+				}
+
+			} else {
+				
+			
+				Match mGet = automaticPropertyPatternGet.Match (property);
+				Match mSet = automaticPropertyPatternSet.Match (property);
+				if (mGet.Success && mSet.Success) {
+				
+					FieldDefinition fieldGet = mGet.Get<AstNode> ("fieldReferenceGet").Single ().Annotation<FieldReference> ().ResolveWithinSameModule ();
+					FieldDefinition fieldSet = mSet.Get<AstNode> ("fieldReferenceSet").Single ().Annotation<FieldReference> ().ResolveWithinSameModule ();
+
+					if (fieldGet!=fieldSet || !fieldGet.IsCompilerGenerated () || fieldSet.DeclaringType != cecilProperty.DeclaringType) {
+						return null;
+					}
+					RemoveCompilerGeneratedAttribute (property.Getter.Attributes);
+					property.Getter.Body = null;
+				
+					RemoveCompilerGeneratedAttribute (property.Setter.Attributes);
+					property.Setter.Body = null;
+
 				}
 			}
 			// Since the event instance is not changed, we can continue in the visitor as usual, so return null
