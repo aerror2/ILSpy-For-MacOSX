@@ -61,6 +61,7 @@ namespace ICSharpCode.Decompiler.Ast.Transforms
 		
 		public override object VisitObjectCreateExpression(ObjectCreateExpression objectCreateExpression, object data)
 		{
+             Console.WriteLine(objectCreateExpression.ToString());
 			if (objectCreateExpression.Arguments.Count == 2) {
 				Expression obj = objectCreateExpression.Arguments.First();
 				Expression func = objectCreateExpression.Arguments.Last();
@@ -69,8 +70,10 @@ namespace ICSharpCode.Decompiler.Ast.Transforms
 					IdentifierExpression methodIdent = (IdentifierExpression)((InvocationExpression)func).Arguments.Single();
 					MethodReference method = methodIdent.Annotation<MethodReference>();
 					if (method != null) {
+                       
 						if (HandleAnonymousMethod (objectCreateExpression, obj, method)) {
-							return null;
+                            Console.WriteLine("is HandleAnonymousMethod");
+                            return null;
 						}
 						// Perform the transformation to "new Action(obj.func)".
 						obj.Remove();
@@ -331,8 +334,35 @@ namespace ICSharpCode.Decompiler.Ast.Transforms
 				bool ok = true;
 				foreach (var identExpr in blockStatement.Descendants.OfType<IdentifierExpression>()) {
 					if (identExpr.Identifier == variable.Name && identExpr != displayClassAssignmentMatch.Get("variable").Single()) {
-						if (!(identExpr.Parent is MemberReferenceExpression && identExpr.Parent.Annotation<FieldReference>() != null))
-							ok = false;
+
+                        if( identExpr.Parent is AssignmentExpression)
+                        {
+                        
+                            if((identExpr.Parent as AssignmentExpression ).Left is MemberReferenceExpression         
+                              )
+                            {
+                                MemberReferenceExpression tleft = (MemberReferenceExpression) (identExpr.Parent as AssignmentExpression).Left;
+                                ILVariable v = tleft.Target.Annotation<ILVariable>();
+                                if(v!=null )
+                                {
+                                    TypeDefinition vtype = v.Type.ResolveWithinSameModule();
+
+                                   
+                                    if(vtype.IsNested &&IsPotentialClosure(context, vtype))
+                                    {
+                                            Console.WriteLine(identExpr.Parent.ToString()+ " cross reference by delegate  should be ok");
+                                            continue;
+                                    }
+                                    
+
+                                }
+                            }
+                        }
+                        if (!(identExpr.Parent is MemberReferenceExpression && identExpr.Parent.Annotation<FieldReference>() != null))
+                        {
+                            ok = false;
+                            break;
+                        }
 					}
 				}
 				if (!ok)
@@ -407,8 +437,10 @@ namespace ICSharpCode.Decompiler.Ast.Transforms
 						} else {
 							break;
 						}
-					} else {
-						break;
+					}
+                    else {
+                        //why need to break? continue to match should be ok
+						//break;
 					}
 				}
 				
@@ -437,6 +469,11 @@ namespace ICSharpCode.Decompiler.Ast.Transforms
 				// Now figure out where the closure was accessed and use the simpler replacement expression there:
 				foreach (var identExpr in blockStatement.Descendants.OfType<IdentifierExpression>()) {
 					if (identExpr.Identifier == variable.Name) {
+                        if (!(identExpr.Parent is MemberReferenceExpression))
+                        {
+                            //will delete by the next round of the cross reference delegate class
+                            continue;
+                        }
 						MemberReferenceExpression mre = (MemberReferenceExpression)identExpr.Parent;
 						AstNode replacement;
 						if (dict.TryGetValue(mre.Annotation<FieldReference>().ResolveWithinSameModule(), out replacement)) {
