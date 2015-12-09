@@ -1221,6 +1221,8 @@ namespace ICSharpCode.Decompiler.ILAst
 
 			int scanTimes = vm.fistStateSwitchLabelList.Count;
 
+			if (initPCValue == 0)
+				scanTimes -= 1;
 			//scan all first swith stat 
 			//
 			for(int i=0; i<scanTimes;i++)
