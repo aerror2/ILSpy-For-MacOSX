@@ -636,7 +636,6 @@ namespace ICSharpCode.Decompiler.ILAst
 		bool isFlowControlCode(ILCode c)
 		{
 			switch (c) {
-			case ILCode.__Br_S:
 			case ILCode.__Brfalse_S:
 			case ILCode.__Brtrue_S:
 			case ILCode.__Beq_S:
@@ -667,6 +666,44 @@ namespace ICSharpCode.Decompiler.ILAst
 			}
 
 			return false;
+		}
+
+		bool isMatchControlBr(ILCode c, int value)
+		{
+			switch (c) {
+			case ILCode.__Beq_S:
+			case ILCode.__Bge_S:
+			case ILCode.__Bgt_S:
+			case ILCode.__Ble_S:
+			case ILCode.__Blt_S:
+			case ILCode.__Bne_Un_S:
+			case ILCode.__Bge_Un_S:
+			case ILCode.__Bgt_Un_S:
+			case ILCode.__Ble_Un_S:
+			case ILCode.__Blt_Un_S:
+			case ILCode.__Beq:
+			case ILCode.__Bge:
+			case ILCode.__Bgt:
+			case ILCode.__Ble:
+			case ILCode.__Blt:
+			case ILCode.__Bne_Un:
+			case ILCode.__Bge_Un:
+			case ILCode.__Bgt_Un:
+			case ILCode.__Ble_Un:
+			case ILCode.__Blt_Un:
+				break;
+
+			case ILCode.__Brfalse_S:
+			case ILCode.__Brfalse:
+				return value == 0;
+			case ILCode.__Brtrue_S:
+			case ILCode.Brtrue:
+				return value != 0;
+			default:
+				break;
+			}
+
+			return false;	
 		}
 		void ScanLine(YieldVMStat vm, int start, int stop)
 		{
@@ -815,29 +852,57 @@ namespace ICSharpCode.Decompiler.ILAst
 						return;
 
 					} else if (isFlowControlCode (expr.Code)) {
-						if (vm.markingLocalChangePos) {
-							vm.localStatChangedPos.Clear ();
-							vm.markingLocalChangePos = false;
-						}
 						ILLabel lb = expr.Operand as ILLabel;
 						if (lb == null) {
 							//impossible 
 							throw new SymbolicAnalysisFailedException (); 
 						}
 
-						int lbPos = vm.labelMaping [lb];
-                        if (!vm.addNewNode(node, m))
-                            return;
-						if (lbPos < m) {
-							ScanLine (vm, lbPos, m);
-                            ScanLine(vm, m + 1, vm.usefulList.Count);
 
+						if (expr == vm.firstStatSwitchExpr) {
+
+							int testvalue = 0;
+							skipNode = true;
+
+							if ((expr.Arguments [0].Code == ILCode.Ldfld
+							    && GetFieldDefinition (expr.Arguments [0].Operand as FieldReference) == stateField)) {
+								testvalue = vm.fieldStat;
+							} else
+								testvalue = vm.localStat;
+
+							if (isMatchControlBr (expr.Code, testvalue)) {
+								vm.addNewNode (new ILExpression (ILCode.Br, lb), m);
+								m = vm.labelMaping [lb];
+								jumpped = true;
+							} else {
+								vm.addNewNode (new ILExpression (ILCode.Nop, null, new List<ILExpression>()), m);
+								Console.WriteLine ("not maching, should skip this and continue");
+							}
+
+							if (vm.markingLocalChangePos) {
+								vm.localStatChangedPos.Clear ();
+								vm.markingLocalChangePos = false;
+							}
 						} else {
-							ScanLine (vm, m + 1, lbPos);
-                            ScanLine(vm, lbPos, vm.usefulList.Count);
+							if (vm.markingLocalChangePos) {
+								vm.localStatChangedPos.Clear ();
+								vm.markingLocalChangePos = false;
+							}
+
+							int lbPos = vm.labelMaping [lb];
+							if (!vm.addNewNode (node, m))
+								return;
+							if (lbPos < m) {
+								ScanLine (vm, lbPos, m);
+								ScanLine (vm, m + 1, vm.usefulList.Count);
+
+							} else {
+								ScanLine (vm, m + 1, lbPos);
+								ScanLine (vm, lbPos, vm.usefulList.Count);
+							}
+							return;
 						}
 
-						return;
 
 					} else if (expr.Code == ILCode.Stloc) {
 						if (expr.Operand == vm.statILVariable) {
@@ -860,10 +925,10 @@ namespace ICSharpCode.Decompiler.ILAst
 							}
 							skipNode = true;
 						} else if (expr.Operand == vm.diposeFlagILVariable) {
-//							if (expr.Arguments [0].Code != ILCode.Ldc_I4) {
-//								throw new SymbolicAnalysisFailedException ();
-//							}
-//							vm.localDisposeFlag = (int)expr.Arguments [0].Operand;
+							if (expr.Arguments [0].Code != ILCode.Ldc_I4) {
+								throw new SymbolicAnalysisFailedException ();
+							}
+							vm.localDisposeFlag = (int)expr.Arguments [0].Operand;
 							skipNode = true;
 						} else if (expr.Operand == returnVariable) {
 							if (expr.Arguments [0].Code != ILCode.Ldc_I4) {
@@ -932,9 +997,7 @@ namespace ICSharpCode.Decompiler.ILAst
 
 					}
 
-				} else if (node is ILTryCatchBlock) {
-					
-				}
+				} 
 
 
 				if (!skipNode) {
@@ -958,6 +1021,10 @@ namespace ICSharpCode.Decompiler.ILAst
 			if (!ilMethod.Body.Last().Match(ILCode.Ret, out lastReturnArg))
 				throw new SymbolicAnalysisFailedException();
 
+			if (ilMethod.Body.Count == 6 || ilMethod.Body.Count == 5) {
+			
+				Console.WriteLine ("Debug Pos" + ilMethod.ToString ());
+			}
 			 
 //			ILVariable stateVar=null;
 //			ILVariable diposeFlagVar=null;
@@ -978,12 +1045,7 @@ namespace ICSharpCode.Decompiler.ILAst
 						if (vm.statILVariable == null && expr.Arguments [0].Code == ILCode.Ldfld
 						    && GetFieldDefinition (expr.Arguments [0].Operand as FieldReference) == stateField) {
 							vm.statILVariable = expr.Operand as ILVariable;
-						} else if (vm.diposeFlagILVariable == null && expr.Operand != vm.statILVariable && expr.Arguments [0].Code == ILCode.Ldc_I4) {
-
-							//flag to control finally block dipose
-							vm.diposeFlagILVariable = expr.Operand as ILVariable;
-
-						}
+						} 
 						break;
 					case ILCode.Ret:
 						//find out the return Jump Lable and stat
@@ -1012,11 +1074,7 @@ namespace ICSharpCode.Decompiler.ILAst
 						break;
 					}
 					vm.usefulList.Add (expr);
-				} else if (node is ILBasicBlock) {
-					foreach (ILNode blkNode in (node as ILBasicBlock).Body) {
-						vm.usefulList.Add (blkNode);
-					}
-				}
+				} 
 				else if (node is ILTryCatchBlock) {
 					ILTryCatchBlock tryBlock = node as ILTryCatchBlock;
 					//check if a state try
@@ -1044,6 +1102,15 @@ namespace ICSharpCode.Decompiler.ILAst
 					if (isStateTry) {
 						foreach (ILNode blkNode in tryBlock.TryBlock.Body) {
 							vm.usefulList.Add (blkNode);
+						}
+
+						foreach (ILNode blkNode in tryBlock.FinallyBlock.Body) {
+							if (blkNode is ILExpression) {
+								ILExpression blkExpr = blkNode as ILExpression;
+								if (blkExpr.Code == ILCode.Stloc && vm.diposeFlagILVariable == null && blkExpr.Operand != vm.statILVariable && blkExpr.Arguments [0].Code == ILCode.Ldc_I4) {
+									vm.diposeFlagILVariable = blkExpr.Operand as ILVariable;
+								}
+							}
 						}
 					} else {
 						
@@ -1128,7 +1195,12 @@ namespace ICSharpCode.Decompiler.ILAst
 							vm.firstStatSwitchExpr = expr;
 							expectedSwitchFollowBr = true;
 						}
-					} else if (expr.Code == ILCode.Br && expectedSwitchFollowBr) {
+					} else if (isFlowControlCode (expr.Code) && expr.Arguments.Count>0 && expr.Arguments[0].Operand==vm.statILVariable) {
+						ILLabel lb = expr.Operand as ILLabel;
+						vm.fistStateSwitchLabelList.Add (lb);
+						vm.firstStatSwitchExpr = expr;
+					}
+					else if (expr.Code == ILCode.Br && expectedSwitchFollowBr) {
 						expectedSwitchFollowBr = false;
 						if (initPCValue < 0) {
 							vm.fistStateSwitchLabelList.Insert (0, expr.Operand as ILLabel);
@@ -1148,8 +1220,7 @@ namespace ICSharpCode.Decompiler.ILAst
 
 
 			int scanTimes = vm.fistStateSwitchLabelList.Count;
-			if (initPCValue >= 0)
-				scanTimes -= 1;
+
 			//scan all first swith stat 
 			//
 			for(int i=0; i<scanTimes;i++)
@@ -1157,14 +1228,7 @@ namespace ICSharpCode.Decompiler.ILAst
 				vm.reset ();
 				if(initPCValue==0  )
 				{
-					if(i==vm.fistStateSwitchLabelList.Count-1)
-					{
-						vm.fieldStat=-2;
-					}
-					else
-					{
-						vm.fieldStat=i;
-					}
+					vm.fieldStat=i;
 				}
 				else 
 				{
@@ -1185,7 +1249,7 @@ namespace ICSharpCode.Decompiler.ILAst
 //			ScanLine (vm, 0);
 
 			createdBody = vm.outputNewBody ();
-			if (createdBody.Count == 28) {
+			if (ilMethod.Body.Count == 6 || ilMethod.Body.Count == 5) {
 				Console.WriteLine ("xxxx size " + createdBody.Count);
 			}
 			Console.WriteLine ("create size " + createdBody.Count);
