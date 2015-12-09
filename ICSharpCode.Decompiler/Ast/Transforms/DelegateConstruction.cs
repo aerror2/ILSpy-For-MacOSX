@@ -335,6 +335,7 @@ namespace ICSharpCode.Decompiler.Ast.Transforms
 				foreach (var identExpr in blockStatement.Descendants.OfType<IdentifierExpression>()) {
 					if (identExpr.Identifier == variable.Name && identExpr != displayClassAssignmentMatch.Get("variable").Single()) {
 
+                        //check if it a cross reference to another generated delegate class's member 
                         if( identExpr.Parent is AssignmentExpression)
                         {
                         
