@@ -1073,6 +1073,30 @@ namespace ICSharpCode.Decompiler.Ast.Transforms
 						Right = new IdentifierExpressionBackreference("var2")
 					}}
 			}};
+
+		static readonly Accessor automaticEventPatternMono = new Accessor {
+			Attributes = { new Repeat(new AnyNode()) },
+			Body = new BlockStatement {
+				new AssignmentExpression {
+					Left =  new NamedNode(
+						"field",
+						new MemberReferenceExpression {
+							Target = new Choice { new ThisReferenceExpression(), new TypeReferenceExpression { Type = new AnyNode() } },
+							MemberName = Pattern.AnyString
+						}
+					),
+					Operator = AssignmentOperatorType.Assign,
+					Right = new AnyNode("delegateCombine").ToExpression().Invoke(
+						new Backreference("field"),
+						new IdentifierExpression("value")
+					).CastTo( new AnyNode("type"))
+				}
+
+			}
+		};
+
+
+		
 		
 		bool CheckAutomaticEventV4Match(Match m, CustomEventDeclaration ev, bool isAddAccessor)
 		{
@@ -1090,31 +1114,45 @@ namespace ICSharpCode.Decompiler.Ast.Transforms
 		
 		EventDeclaration TransformAutomaticEvents(CustomEventDeclaration ev)
 		{
+			Match mmo1 = automaticEventPatternMono.Match (ev.AddAccessor);
+			if (CheckAutomaticEventV4Match (mmo1, ev, true)) {
+				Match mmo2 = automaticEventPatternMono.Match (ev.RemoveAccessor);
+				if (CheckAutomaticEventV4Match (mmo2, ev, false)) {
+					EventDeclaration ed2 = new EventDeclaration();
+					ev.Attributes.MoveTo(ed2.Attributes);
+					foreach (var attr in ev.AddAccessor.Attributes) {
+						ed2.Attributes.Add(attr.Detach());
+					}
+					ed2.ReturnType = ev.ReturnType.Detach();
+					ed2.Modifiers = ev.Modifiers;
+					ed2.Variables.Add(new VariableInitializer(ev.Name));
+					ed2.CopyAnnotationsFrom(ev);
+
+					EventDefinition eventDef2 = ev.Annotation<EventDefinition>();
+					if (eventDef2 != null) {
+						FieldDefinition field = eventDef2.DeclaringType.Fields.FirstOrDefault(f => f.Name == ev.Name);
+						if (field != null) {
+							ed2.AddAnnotation(field);
+							AstBuilder.ConvertAttributes(ed2, field, "field");
+						}
+					}
+
+					ev.ReplaceWith(ed2);
+					return ed2;
+				}
+			}
+
+
+
+
+
+	//		Math mmo2 = automaticEventPatternMono.Match (ev.RemoveAccessor);
+
+
+
 			Match m1 = automaticEventPatternV4.Match(ev.AddAccessor);
 			if (!CheckAutomaticEventV4Match (m1, ev, true)) {
-				EventDeclaration ed2 = new EventDeclaration();
-				ev.Attributes.MoveTo(ed2.Attributes);
-//				foreach (var attr in ev.AddAccessor.Attributes) {
-//					attr.AttributeTarget = "method";
-//					ed2.Attributes.Add(attr.Detach());
-//				}
-				ed2.ReturnType = ev.ReturnType.Detach();
-				ed2.Modifiers = ev.Modifiers;
-				ed2.Variables.Add(new VariableInitializer(ev.Name));
-				ed2.CopyAnnotationsFrom(ev);
-
-				EventDefinition eventDef2 = ev.Annotation<EventDefinition>();
-				if (eventDef2 != null) {
-					FieldDefinition field = eventDef2.DeclaringType.Fields.FirstOrDefault(f => f.Name == ev.Name);
-					if (field != null) {
-						ed2.AddAnnotation(field);
-						AstBuilder.ConvertAttributes(ed2, field, "field");
-					}
-				}
-
-				ev.ReplaceWith(ed2);
-				return ed2;
-
+				return null;
 			}
 
 			Match m2 = automaticEventPatternV4.Match(ev.RemoveAccessor);
