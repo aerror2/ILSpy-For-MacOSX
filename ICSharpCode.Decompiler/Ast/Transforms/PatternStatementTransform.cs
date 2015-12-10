@@ -744,13 +744,122 @@ namespace ICSharpCode.Decompiler.Ast.Transforms
 			},
 			FalseStatement = new OptionalNode("nullStmt", new BlockStatement { Statements = { new Repeat(new AnyNode()) } })
 		};
+
+        static readonly IfElseStatement switchOnStringPatternSingle = new IfElseStatement
+        {
+            Condition = new BinaryOperatorExpression
+            {
+                Left = new AnyNode("switchExpr"),
+                Operator = BinaryOperatorType.InEquality,
+                Right = new NullReferenceExpression()
+            },
+            TrueStatement = new BlockStatement {
+				new IfElseStatement {
+					Condition = new BinaryOperatorExpression {
+						Left = new AnyNode("cachedDict"),
+						Operator = BinaryOperatorType.Equality,
+						Right = new NullReferenceExpression()
+					},
+					TrueStatement = new AnyNode("dictCreation")
+				},
+
+				new IfElseStatement {
+					Condition = new Backreference("cachedDict").ToExpression().Invoke(
+						"TryGetValue",
+						new NamedNode("switchVar", new IdentifierExpression(Pattern.AnyString)),
+						new DirectionExpression {
+							FieldDirection = FieldDirection.Out,
+							Expression = new IdentifierExpression(Pattern.AnyString).WithName("intVar")
+						}),
+					TrueStatement = new BlockStatement {
+
+						new IfElseStatement {
+							Condition = new BinaryOperatorExpression {
+								Left = new IdentifierExpressionBackreference("intVar"),
+								Operator = BinaryOperatorType.Equality,
+								Right = new PrimitiveExpression(0)
+							},
+							TrueStatement = new AnyNode("SwitchSingleblock")
+						}
+					}
+				},
+				new Repeat(new AnyNode("nonNullDefaultStmt")).ToStatement()
+			},
+            FalseStatement = new OptionalNode("nullStmt", new BlockStatement { Statements = { new Repeat(new AnyNode()) } })
+        };
+
+        static readonly IfElseStatement switchOnStringPatternThreeUnion = new IfElseStatement
+        {
+            Condition = new BinaryOperatorExpression
+            {
+                Left = new AnyNode("switchExpr"),
+                Operator = BinaryOperatorType.InEquality,
+                Right = new NullReferenceExpression()
+            },
+            TrueStatement = new BlockStatement {
+				new IfElseStatement {
+					Condition = new BinaryOperatorExpression {
+						Left = new AnyNode("cachedDict"),
+						Operator = BinaryOperatorType.Equality,
+						Right = new NullReferenceExpression()
+					},
+					TrueStatement = new AnyNode("dictCreation")
+				},
+
+				new IfElseStatement {
+					Condition = new Backreference("cachedDict").ToExpression().Invoke(
+						"TryGetValue",
+						new NamedNode("switchVar", new IdentifierExpression(Pattern.AnyString)),
+						new DirectionExpression {
+							FieldDirection = FieldDirection.Out,
+							Expression = new IdentifierExpression(Pattern.AnyString).WithName("intVar")
+						}),
+					TrueStatement = new BlockStatement {
+
+						new IfElseStatement {
+							Condition = new BinaryOperatorExpression {
+								Left = new IdentifierExpressionBackreference("intVar"),
+								Operator = BinaryOperatorType.InEquality,
+								Right = new PrimitiveExpression(0)
+							},
+							TrueStatement =  new BlockStatement {
+						                new IfElseStatement {
+							                Condition = new BinaryOperatorExpression {
+								                Left = new IdentifierExpressionBackreference("intVar"),
+								                Operator = BinaryOperatorType.Equality,
+								                Right = new PrimitiveExpression(1)
+							                },
+							                TrueStatement =   new AnyNode("SwitchSingleblock2"),
+						                }
+					                },
+                            FalseStatement = new AnyNode("SwitchSingleblock"),
+						}
+					}
+				},
+				new Repeat(new AnyNode("nonNullDefaultStmt")).ToStatement()
+			},
+            FalseStatement = new OptionalNode("nullStmt", new BlockStatement { Statements = { new Repeat(new AnyNode()) } })
+        };
+
 		
 		public SwitchStatement TransformSwitchOnString(IfElseStatement node)
 		{
 			Match m = switchOnStringPattern.Match(node);
-			if (!m.Success)
-				return null;
-			// switchVar must be the same as switchExpr; or switchExpr must be an assignment and switchVar the left side of that assignment
+            if (!m.Success)
+            {
+                //check for single switch on string, compiler make it as ifelse statement
+                m = switchOnStringPatternSingle.Match(node);
+                if (!m.Success)
+                {
+                    m = switchOnStringPatternThreeUnion.Match(node);
+                    if(!m.Success)
+                      return null;
+                }
+               
+            }
+            
+
+            // switchVar must be the same as switchExpr; or switchExpr must be an assignment and switchVar the left side of that assignment
 			if (!m.Get("switchVar").Single().IsMatch(m.Get("switchExpr").Single())) {
 				AssignmentExpression assign = m.Get("switchExpr").Single() as AssignmentExpression;
 				if (!(assign != null && m.Get("switchVar").Single().IsMatch(assign.Left)))
@@ -761,22 +870,96 @@ namespace ICSharpCode.Decompiler.Ast.Transforms
 				return null;
 			List<Statement> dictCreation = m.Get<BlockStatement>("dictCreation").Single().Statements.ToList();
 			List<KeyValuePair<string, int>> dict = BuildDictionary(dictCreation);
-			SwitchStatement sw = m.Get<SwitchStatement>("switch").Single();
-			sw.Expression = m.Get<Expression>("switchExpr").Single().Detach();
-			foreach (SwitchSection section in sw.SwitchSections) {
-				List<CaseLabel> labels = section.CaseLabels.ToList();
-				section.CaseLabels.Clear();
-				foreach (CaseLabel label in labels) {
-					PrimitiveExpression expr = label.Expression as PrimitiveExpression;
-					if (expr == null || !(expr.Value is int))
-						continue;
-					int val = (int)expr.Value;
-					foreach (var pair in dict) {
-						if (pair.Value == val)
-							section.CaseLabels.Add(new CaseLabel { Expression = new PrimitiveExpression(pair.Key) });
-					}
-				}
-			}
+         
+            SwitchStatement sw ;
+            if (m.Has("SwitchSingleblock"))
+            {
+
+                if (dict.Count < 1)
+                    return null;
+                 
+                 sw = new SwitchStatement();
+                 BlockStatement stmts0 = m.Get<BlockStatement>("SwitchSingleblock").Single().Detach();
+                 sw.Expression = m.Get<Expression>("switchExpr").Single().Detach();
+                 stmts0.Add(new BreakStatement());
+                   
+
+                BlockStatement stmts1 = null;
+                SwitchSection swsec1 = null;
+                if(m.Has("SwitchSingleblock2"))
+                {
+                    stmts1 = m.Get<BlockStatement>("SwitchSingleblock2").Single().Detach();
+                    stmts1.Add(new BreakStatement());
+                    swsec1 = new SwitchSection
+                    {
+                             CaseLabels = { } ,
+                             Statements = { stmts1 }
+                    };
+
+                }
+
+            
+                
+                 SwitchSection swsec0 = new SwitchSection
+                 {
+                         CaseLabels = {  },
+                         Statements = { stmts0 }
+                 };
+
+
+                
+
+                 foreach (KeyValuePair<string, int> ppv in dict)
+                 {
+                     if(ppv.Value==0 )
+                     {
+                         swsec0.CaseLabels.Add(new CaseLabel { Expression = new PrimitiveExpression(ppv.Key) });
+                     }
+                     else if (ppv.Value == 1 && swsec1 != null)
+                     {
+                         swsec1.CaseLabels.Add(new CaseLabel { Expression = new PrimitiveExpression(ppv.Key) });
+                     }
+                     else
+                     {
+                         // unknown pattern.
+                         return null;
+                     }
+
+                 }
+                 
+                 
+
+                 sw.SwitchSections.Add(swsec0);
+                 if(swsec1!=null)
+                     sw.SwitchSections.Add(swsec1);
+
+                 
+
+            }
+            else
+            {
+                 sw = m.Get<SwitchStatement>("switch").Single();
+                 foreach (SwitchSection section in sw.SwitchSections)
+                 {
+                     List<CaseLabel> labels = section.CaseLabels.ToList();
+                     section.CaseLabels.Clear();
+                     foreach (CaseLabel label in labels)
+                     {
+                         PrimitiveExpression expr = label.Expression as PrimitiveExpression;
+                         if (expr == null || !(expr.Value is int))
+                             continue;
+                         int val = (int)expr.Value;
+                         foreach (var pair in dict)
+                         {
+                             if (pair.Value == val)
+                                 section.CaseLabels.Add(new CaseLabel { Expression = new PrimitiveExpression(pair.Key) });
+                         }
+                     }
+                 }
+            }
+          
+
+			
 			if (m.Has("nullStmt")) {
 				SwitchSection section = new SwitchSection();
 				section.CaseLabels.Add(new CaseLabel { Expression = new NullReferenceExpression() });
