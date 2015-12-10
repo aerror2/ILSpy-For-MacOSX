@@ -939,7 +939,9 @@ namespace ICSharpCode.Decompiler.Ast.Transforms
             else
             {
                  sw = m.Get<SwitchStatement>("switch").Single();
-                 foreach (SwitchSection section in sw.SwitchSections)
+                 sw.Expression = m.Get<Expression>("switchExpr").Single().Detach();
+
+                foreach (SwitchSection section in sw.SwitchSections)
                  {
                      List<CaseLabel> labels = section.CaseLabels.ToList();
                      section.CaseLabels.Clear();
