@@ -50,17 +50,16 @@ namespace ICSharpCode.Decompiler.ILAst
 		public Dictionary<int,int>   localStatChangedPos = new Dictionary<int,int>();
 		public Dictionary<int,ILTryCatchBlockInfo> tryBlockMapping = new Dictionary<int,ILTryCatchBlockInfo> ();
 
-
-		public HashSet<int> posWillGotoReturn = new HashSet<int> ();
 		public bool markingLocalChangePos = false;
 		private int maxCodePos = -1;
-		public void reset()
+		public void resetStatVariable()
 		{
 			fieldStat = 0;
 			fieldStat = 0;
 			localDisposeFlag = 0;
 			localReturnValue = 0;
 			localStatChangedPos.Clear ();
+            markingLocalChangePos = false;
 		}
 
 		public bool addNewNode(ILNode node, int pos)
@@ -85,9 +84,13 @@ namespace ICSharpCode.Decompiler.ILAst
 			} else {
 				return addNewNode (node, pos);
 			}
-
-		
 		}
+
+        public void clearCreatedNodes()
+        {
+            maxCodePos = -1;
+            this.newBody.Clear();
+        }
 
 		public List<ILNode> outputNewBody()
 		{
@@ -785,7 +788,8 @@ namespace ICSharpCode.Decompiler.ILAst
 									if (!addedJump && vm.fieldStatChangedPos.ContainsKey (finalStatVal)) {
 										int stateStartPos = vm.fieldStatChangedPos [finalStatVal];
 										addedJump = vm.addNewNode (new ILExpression (ILCode.Br, jmpLabel), stateStartPos);
-									} 
+									}
+
 									vm.localStatChangedPos.Clear ();
 								} else {
 									
@@ -793,15 +797,20 @@ namespace ICSharpCode.Decompiler.ILAst
 										int stateStartPos = vm.localStatChangedPos [finalStatVal];
 
 										addedJump = vm.addNewNode (new ILExpression (ILCode.Br, jmpLabel), stateStartPos);
+
+                                        if (!addedJump)
+                                        {
+                                            if (!vm.addNewNode(new ILExpression(ILCode.Br, jmpLabel), m))
+                                            {
+                                                //throw new SymbolicAnalysisFailedException (); 
+                                            }
+                                        }
 									}
+                                  
 								}
-								if (!addedJump) {
-									if (!vm.addNewNode (new ILExpression (ILCode.Br, jmpLabel), m)) {
-										//throw new SymbolicAnalysisFailedException (); 
-									}
-								}
+								
 							} else {
-								vm.addNewNode (new ILExpression (ILCode.Br, jmpLabel), m + 1);
+								vm.addNewNode (new ILExpression (ILCode.Br, jmpLabel), m );
 							}
 
 							vm.localStatChangedPos.Clear ();
@@ -1227,7 +1236,7 @@ namespace ICSharpCode.Decompiler.ILAst
 			//
 			for(int i=0; i<scanTimes;i++)
 			{
-				vm.reset ();
+				vm.resetStatVariable ();
 				if(initPCValue==0  )
 				{
 					vm.fieldStat=i;
@@ -1245,6 +1254,11 @@ namespace ICSharpCode.Decompiler.ILAst
 				}
 				vm.scanningStat = vm.fieldStat;
 				ScanLine (vm,0,vm.usefulList.Count);
+                if(vm.fieldStatChangedPos.Count==0 && i==0 && i<scanTimes && initPCValue<0)
+                {
+                    Console.WriteLine("A compiler bug? .fieldStatChangedPos.Count==0 && i==0 && i<scanTimes && initPCValue<0 at method: " + moveNextMethod.FullName + "\n:" + vm.outputNewBody());
+                    vm.clearCreatedNodes();
+                }
 			}
 
 //			vm.fieldStat=initPCValue;

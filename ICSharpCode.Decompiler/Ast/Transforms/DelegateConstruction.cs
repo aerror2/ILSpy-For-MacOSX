@@ -61,7 +61,7 @@ namespace ICSharpCode.Decompiler.Ast.Transforms
 		
 		public override object VisitObjectCreateExpression(ObjectCreateExpression objectCreateExpression, object data)
 		{
-             Console.WriteLine(objectCreateExpression.ToString());
+        //     Console.WriteLine(objectCreateExpression.ToString());
 			if (objectCreateExpression.Arguments.Count == 2) {
 				Expression obj = objectCreateExpression.Arguments.First();
 				Expression func = objectCreateExpression.Arguments.Last();
@@ -72,7 +72,7 @@ namespace ICSharpCode.Decompiler.Ast.Transforms
 					if (method != null) {
                        
 						if (HandleAnonymousMethod (objectCreateExpression, obj, method)) {
-                            Console.WriteLine("is HandleAnonymousMethod");
+                          //  Console.WriteLine("is HandleAnonymousMethod");
                             return null;
 						}
 						// Perform the transformation to "new Action(obj.func)".

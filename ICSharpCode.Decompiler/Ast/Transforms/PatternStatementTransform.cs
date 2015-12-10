@@ -1302,10 +1302,10 @@ namespace ICSharpCode.Decompiler.Ast.Transforms
 				Match mmo2 = automaticEventPatternMono.Match (ev.RemoveAccessor);
 				if (CheckAutomaticEventV4Match (mmo2, ev, false)) {
 					EventDeclaration ed2 = new EventDeclaration();
-					ev.Attributes.MoveTo(ed2.Attributes);
-					foreach (var attr in ev.AddAccessor.Attributes) {
-						ed2.Attributes.Add(attr.Detach());
-					}
+//					ev.Attributes.MoveTo(ed2.Attributes);
+//					foreach (var attr in ev.AddAccessor.Attributes) {
+//						ed2.Attributes.Add(attr.Detach());
+//					}
 					ed2.ReturnType = ev.ReturnType.Detach();
 					ed2.Modifiers = ev.Modifiers;
 					ed2.Variables.Add(new VariableInitializer(ev.Name));
