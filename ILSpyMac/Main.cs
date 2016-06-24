@@ -24,9 +24,7 @@ namespace Decomplier
 			Console.WriteLine (" made it run at all platform support mono.");
 			Console.WriteLine (" by aerror 2015/11/27");
 			Console.WriteLine (" options:");
-			Console.WriteLine ("       -n  Solution Name");
-			Console.WriteLine ("       -l  References dll path which dll will be loaded but not decompile , they use as References.");
-			Console.WriteLine ("       -t  Output language type, accept il or csharp, default is csharp.");
+
 
 			Console.WriteLine ("       -a  Decompile yield. OFF if exists this option, default ON.");
 			Console.WriteLine ("       -b  Decompile anonymous methods/lambdas. OFF  if exists this option, default ON. ");
@@ -41,23 +39,39 @@ namespace Decomplier
 			Console.WriteLine ("       -i  Decompile lock statements if. OFF  exists this option, default ON. ");
 			Console.WriteLine ("       -j  Decompile SwitchStatement On String. OFF  if exists this option, default ON. ");
 			Console.WriteLine ("       -k  Decompile Using Declarations. OFF  if exists this option, default ON. ");
+			Console.WriteLine ("       -l  References dll path which dll will be loaded but not decompile , they use as References.");
+			Console.WriteLine ("       -n  Solution Name");
 			Console.WriteLine ("       -r  Decompile query Expressions. OFF  if exists this option, default ON. ");
 
 			Console.WriteLine ("       -s  Decompile fully Qualify Ambiguous Type Names. OFF  if exists this option, default ON. ");
+			Console.WriteLine ("       -t  Output language type, accept il or csharp, default is csharp.");
 			Console.WriteLine ("       -p  Use variable names from debug symbols, if available. OFF  if exists this option, default ON. ");
 			Console.WriteLine ("       -x  Use C# 3.0 object/collection initializers. OFF if exists this option, default ON. ");
 			Console.WriteLine ("       -y  Include XML documentation comments in the decompiled code. OFF  if exists this option, default ON.");
 			Console.WriteLine ("       -z  Fold braces. ON if exists this option, default OFF ");
 
 			Console.WriteLine ("       -C  class Name ");
-
+			Console.WriteLine ("       -D  Ony specitfied files to do decompiling in the Directory");
 
 			Console.WriteLine (" Example:");
 			Console.WriteLine (" ILSpyMac -n Example -l /directory/to/Rerences/dll /directory/to/all/your/dll");
 
 
 		}
+	
+		public static bool isDecompilingFile(string fullName, List<string> includedList)
+		{
+			if (includedList.Count == 0)
+				return true;
+			
+			foreach (string x in includedList) {
+				if (fullName.EndsWith (x)) {
+					return true;
+				}
+			}
 
+			return false;
+		}
 
 		public static bool praseDecompileSetting(char c, DecompilerSettings ds)
 		{
@@ -139,10 +153,12 @@ namespace Decomplier
 			ds.AsyncAwait = true;
 			ds.YieldReturn = true;
 			string onlyDecomileClassName = null;
+
+			List<string> onlyDecompilingFileNameList = new List<string> ();
 			//parsing args
 			foreach (string x in args) {
 
-				if (expOpt == null) {
+				if (x.StartsWith ("-")) {
 					switch (x) {
 					case "-n":
 					case "-l":
@@ -172,48 +188,53 @@ namespace Decomplier
 							continue;
 						} 
 
-						if (appPath == null) {
-							appPath = x;
-							continue;
-						} else {
-							Console.WriteLine (" Unexpected options " + x);
-							showUsage ();
-							return;
-						}
-
-
+						break;
 					}
 
-				} else {
+				} else if (expOpt != null) {
 
 					switch (expOpt) {
 					case "-n":
 						slnName = x;
-
+						expOpt = null;
 						break;
 					case "-l":
 						libPath = x;
+						expOpt = null;
 						break;
 					case "-t":
-						if(x!=LAN_TYPE_CSHARP && x!=LAN_TYPE_IL)
-						{
+						if (x != LAN_TYPE_CSHARP && x != LAN_TYPE_IL) {
 							Console.WriteLine (" Unexpected Output language type: " + x);
-							showUsage();
-							return ;
+							showUsage ();
+							return;
 						}
 						outLanguageType = x;
-
+						expOpt = null;
 						break;
 					case "-C":
 						onlyDecomileClassName = x;
+						expOpt = null;
+						break;
+					case "-D":
+						onlyDecompilingFileNameList.Add (x);
 						break;
 					default:
 						showUsage ();
+						expOpt = null;
 						return;
 					
 					}
-					expOpt = null;
 
+
+				} else {
+					if (appPath == null) {
+						appPath = x;
+						continue;
+					} else {
+						Console.WriteLine (" Unexpected options " + x);
+						showUsage ();
+						return;
+					}
 				}
 					
 			}
@@ -247,13 +268,17 @@ namespace Decomplier
 
 			foreach (var dllfile in dllFileInfoList)
 			{
-				asmlist.OpenAssembly (dllfile.FullName);
+				bool bDecompile = isDecompilingFile (dllfile.FullName, onlyDecompilingFileNameList);
+				asmlist.OpenAssembly (dllfile.FullName,!bDecompile);
 			}
 
 			foreach (var dllfile in exeFileInfoList)
 			{
-				asmlist.OpenAssembly (dllfile.FullName);
+				bool bDecompile = isDecompilingFile (dllfile.FullName, onlyDecompilingFileNameList);
+
+				asmlist.OpenAssembly (dllfile.FullName,!bDecompile);
 			}
+
 
 			if (libPath != null) {
 				di = new DirectoryInfo(libPath);
