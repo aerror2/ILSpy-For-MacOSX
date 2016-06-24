@@ -164,6 +164,7 @@ namespace Decomplier
 					case "-l":
 					case "-t":
 					case "-C":
+					case "-D":
 						expOpt = x;
 						continue;
 					
