@@ -207,7 +207,10 @@ namespace ICSharpCode.Decompiler.ILAst
 			}
 			
 			if (abortBeforeStep == ILAstOptimizationStep.FlattenNestedMovableBlocks) return;
+
+
 			FlattenBasicBlocks(method);
+		
 			
 			if (abortBeforeStep == ILAstOptimizationStep.RemoveEndFinally) return;
 			RemoveEndFinally(method);

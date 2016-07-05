@@ -102,8 +102,20 @@ namespace ICSharpCode.Decompiler.ILAst
 				if (this.newBody.ContainsKey (i)) {
 
 					List<ILExpression> args = new List<ILExpression>();
-					if (lastNode is ILLabel && this.newBody [i] is ILLabel) {
-						b.Add (new ILExpression (ILCode.Nop, null, args));
+
+
+					if (lastNode!=null ) {
+						if (lastNode is ILLabel && this.newBody [i] is ILLabel) {
+							b.Add (new ILExpression (ILCode.Nop, null, args));
+						} else if (lastNode is ILExpression && this.newBody [i] is ILLabel
+							&& (lastNode as ILExpression).Code== ILCode.Br 
+							&&  ((lastNode as ILExpression).Operand as ILLabel).Name ==  (this.newBody [i] as ILLabel).Name
+							 
+						) {
+							b.Remove (lastNode);
+						}
+							
+							
 					}
 					lastNode = this.newBody [i];
 
@@ -121,7 +133,9 @@ namespace ICSharpCode.Decompiler.ILAst
 
 				}
 			}
-
+			if (!b.LastOrDefault ().IsUnconditionalControlFlow()) {
+				b.Add (new ILExpression (ILCode.YieldBreak, null));
+			}
 			return b;
 		}
 	}
@@ -162,6 +176,7 @@ namespace ICSharpCode.Decompiler.ILAst
 			if (!yrd.MatchEnumeratorCreationPattern(method))
 				return;
 			yrd.enumeratorType = yrd.enumeratorCtor.DeclaringType;
+
 			#if DEBUG
 			if (Debugger.IsAttached) {
 				yrd.Run();
@@ -192,8 +207,12 @@ namespace ICSharpCode.Decompiler.ILAst
 			//AnalyzeCurrentProperty();
 			ResolveIEnumerableIEnumeratorFieldMapping();
 		//	ConstructExceptionTable();
-			AnalyzeMoveNext2();
-			TranslateFieldsToLocalAccess();
+			bool ret = AnalyzeMoveNext2();
+			if (ret) {
+				TranslateFieldsToLocalAccess ();
+			} else {
+				createdBody = new List<ILNode> ();
+			}
 		}
 		#endregion
 		
@@ -240,7 +259,18 @@ namespace ICSharpCode.Decompiler.ILAst
 							if (expr.Arguments [1].Code != ILCode.Ldc_I4) {
 								return false;
 							}
-							this.initPCValue = (int)expr.Arguments [1].Operand;
+							//do not assinged the initPCValue, it should be alwas zero should be fine, because 
+//							IL_0000: ldarg.0
+//							IL_0001: ldflda int32 GameUpdateManager/'<UpdateRoutine>c__Iterator7'::$PC
+//							IL_0006: ldc.i4.0
+//							IL_0007: ldc.i4.s -2
+//							IL_0009: call int32 [mscorlib]System.Threading.Interlocked::CompareExchange(int32&, int32, int32)
+//							IL_000e: ldc.i4.s -2
+//							IL_0010: bne.un.s IL_0014
+
+							//will set the pc vavlue to zero when it's some negative value
+							//this.initPCValue = (int)expr.Arguments [1].Operand;
+
 						} else {
 							FieldReference storedField;
 							ILExpression ldloc, loadParameter;
@@ -1023,17 +1053,22 @@ namespace ICSharpCode.Decompiler.ILAst
 
 		}
 
-		void AnalyzeMoveNext2()
+		bool AnalyzeMoveNext2()
 		{
 			ILBlock ilMethod = CreateILAst(moveNextMethod);
 			ILExpression lastReturnArg;
 			if (!ilMethod.Body.Last().Match(ILCode.Ret, out lastReturnArg))
 				throw new SymbolicAnalysisFailedException();
 
-			if (ilMethod.Body.Count == 6 || ilMethod.Body.Count == 5) {
-			
-				Console.WriteLine ("Debug Pos" + ilMethod.ToString ());
-			}
+//			if (ilMethod.Body.Count == 6 || ilMethod.Body.Count == 5) {
+//			
+//				Console.WriteLine ("Debug Pos" + ilMethod.ToString ());
+//			}
+
+//			if (ilMethod.Body.Count == 24) {
+//
+//				Console.WriteLine ("Debug Pos2 " + ilMethod.ToString ());
+//			}
 			 
 //			ILVariable stateVar=null;
 //			ILVariable diposeFlagVar=null;
@@ -1132,14 +1167,6 @@ namespace ICSharpCode.Decompiler.ILAst
 						}
 
 
-						if (tryBlock.FinallyBlock != null) {
-							foreach (ILNode blkNode in tryBlock.FinallyBlock.Body) {
-								vm.usefulList.Add (blkNode);
-								vm.tryBlockMapping [vm.usefulList.Count - 1] = new ILTryCatchBlockInfo(){blk=tryBlock,nodelistRef=tryBlock.FinallyBlock.Body};
-							}
-							tryBlock.FinallyBlock.Body.Clear ();
-						}
-
 						if (tryBlock.CatchBlocks.Count != 0) {
 							foreach (ILTryCatchBlock.CatchBlock blk in tryBlock.CatchBlocks) {
 								foreach (ILNode blkNode in blk.Body) {
@@ -1152,6 +1179,16 @@ namespace ICSharpCode.Decompiler.ILAst
 								blk.Body.Clear ();
 							}
 						}
+
+						if (tryBlock.FinallyBlock != null) {
+							foreach (ILNode blkNode in tryBlock.FinallyBlock.Body) {
+								vm.usefulList.Add (blkNode);
+								vm.tryBlockMapping [vm.usefulList.Count - 1] = new ILTryCatchBlockInfo(){blk=tryBlock,nodelistRef=tryBlock.FinallyBlock.Body};
+							}
+							tryBlock.FinallyBlock.Body.Clear ();
+						}
+
+
 
 						if (tryBlock.FaultBlock != null) {
 							foreach (ILNode blkNode in tryBlock.FaultBlock.Body) {
@@ -1258,6 +1295,7 @@ namespace ICSharpCode.Decompiler.ILAst
                 {
                     Console.WriteLine("A compiler bug? .fieldStatChangedPos.Count==0 && i==0 && i<scanTimes && initPCValue<0 at method: " + moveNextMethod.FullName + "\n:" + vm.outputNewBody());
                     vm.clearCreatedNodes();
+					return false;
                 }
 			}
 
@@ -1265,10 +1303,14 @@ namespace ICSharpCode.Decompiler.ILAst
 //			ScanLine (vm, 0);
 
 			createdBody = vm.outputNewBody ();
-			if (ilMethod.Body.Count == 6 || ilMethod.Body.Count == 5) {
-				Console.WriteLine ("xxxx size " + createdBody.Count);
-			}
+//			if (ilMethod.Body.Count == 6 || ilMethod.Body.Count == 5) {
+//				Console.WriteLine ("xxxx size " + createdBody.Count);
+//			}
+//			if (createdBody.Count == 24) {
+//				Console.WriteLine ("debug pos " + createdBody.ToString ());
+//			}
 			Console.WriteLine ("create size " + createdBody.Count);
+			return true;
 
 		}
 		#region ConvertBody
