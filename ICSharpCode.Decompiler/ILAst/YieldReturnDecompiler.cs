@@ -177,19 +177,19 @@ namespace ICSharpCode.Decompiler.ILAst
 				return;
 			yrd.enumeratorType = yrd.enumeratorCtor.DeclaringType;
 
-			#if DEBUG
-			if (Debugger.IsAttached) {
-				yrd.Run();
-			} else {
-				#endif
+//			#if DEBUG
+//			if (Debugger.IsAttached) {
+//				yrd.Run();
+//			} else {
+//				#endif
 				try {
 					yrd.Run();
 				} catch (SymbolicAnalysisFailedException) {
 					return;
 				}
-				#if DEBUG
-			}
-			#endif
+//				#if DEBUG
+//			}
+//			#endif
 			method.Body.Clear();
 			method.EntryGoto = null;
 			method.Body.AddRange(yrd.createdBody);
