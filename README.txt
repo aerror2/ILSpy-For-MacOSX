@@ -17,7 +17,7 @@ So thanks to ILSpy Contributors:
 They did a great work.
 
 
-Features:
+New Features for ILSpy-ForMacOSX:
 1. add Couroutine decompiling feature for mono's dll, the original ILSPY always failed for mono's dll which mostly uses in Unity3D's game. 
 2. works on command line;
 3. Decompile all dll in the input arguments and generate the project files and solution files just simply by one simple command line.
