@@ -1969,7 +1969,8 @@ namespace Mono.Cecil {
 				var method = ReadMetadataToken (CodedIndex.MethodDefOrRef);
 				if (method.TokenType != TokenType.Method)
 					throw new NotSupportedException ();
-
+					//continue;
+				
 				var @override = ReadMetadataToken (CodedIndex.MethodDefOrRef);
 
 				AddOverrideMapping (method.RID, @override);

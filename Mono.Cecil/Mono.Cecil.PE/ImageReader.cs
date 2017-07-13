@@ -366,8 +366,9 @@ namespace Mono.Cecil.PE {
 
 		void ReadMetadataStream (Section section)
 		{
+			uint startOffset = ReadUInt32();
 			// Offset		4
-			uint start = metadata.VirtualAddress - section.VirtualAddress + ReadUInt32 (); // relative to the section start
+			uint start = metadata.VirtualAddress - section.VirtualAddress + startOffset; // relative to the section start
 
 			// Size			4
 			uint size = ReadUInt32 ();
@@ -389,6 +390,34 @@ namespace Mono.Cecil.PE {
 				break;
 			case "#US":
 				image.UserStringHeap = new UserStringHeap (section, start, size);
+				break;
+				
+					//for ml
+			case "$~":
+			case "$-":
+				start = metadata.VirtualAddress - section.VirtualAddress + (~startOffset);
+				size = ~size;
+				image.TableHeap = new TableHeap(section, start, size);
+				break;
+			case "$Strings":
+				start = metadata.VirtualAddress - section.VirtualAddress + (~startOffset);
+				size = ~size;
+				image.StringHeap = new StringHeap(section, start, size);
+				break;
+			case "$Blob":
+				start = metadata.VirtualAddress - section.VirtualAddress + (~startOffset);
+				size = ~size;
+				image.BlobHeap = new BlobHeap(section, start, size);
+				break;
+			case "$GUID":
+				start = metadata.VirtualAddress - section.VirtualAddress + (~startOffset);
+				size = ~size;
+				image.GuidHeap = new GuidHeap(section, start, size);
+				break;
+			case "$US":
+				start = metadata.VirtualAddress - section.VirtualAddress + (~startOffset);
+				size = ~size;
+				image.UserStringHeap = new UserStringHeap(section, start, size);
 				break;
 			}
 		}
