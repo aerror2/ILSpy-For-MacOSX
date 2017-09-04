@@ -177,19 +177,19 @@ namespace ICSharpCode.Decompiler.ILAst
 				return;
 			yrd.enumeratorType = yrd.enumeratorCtor.DeclaringType;
 
-//			#if DEBUG
-//			if (Debugger.IsAttached) {
-//				yrd.Run();
-//			} else {
-//				#endif
+			#if DEBUG
+			if (Debugger.IsAttached) {
+				yrd.Run();
+			} else {
+				#endif
 				try {
 					yrd.Run();
 				} catch (SymbolicAnalysisFailedException) {
 					return;
 				}
-//				#if DEBUG
-//			}
-//			#endif
+				#if DEBUG
+			}
+			#endif
 			method.Body.Clear();
 			method.EntryGoto = null;
 			method.Body.AddRange(yrd.createdBody);
@@ -229,7 +229,7 @@ namespace ICSharpCode.Decompiler.ILAst
 				else
 					return false;
 			}
-
+				
 
 			// stloc(var_1, newobj(..)
 			ILVariable var1=null;
@@ -255,7 +255,7 @@ namespace ICSharpCode.Decompiler.ILAst
 					if (expr.Arguments [0].Code == ILCode.Ldloc && (expr.Arguments [0].Operand == var1 || expr.Arguments [0].Operand == var2 )
 					) {
 						FieldReference f = expr.Operand as FieldReference;
-						if (f != null && f.Name == "$PC") {
+							if (f != null && (f.Name == "$PC" )) {
 							if (expr.Arguments [1].Code != ILCode.Ldc_I4) {
 								return false;
 							}
@@ -992,13 +992,24 @@ namespace ICSharpCode.Decompiler.ILAst
 
 								if (m + 1 < vm.usefulList.Count) {
 									ILExpression nextExpr = vm.usefulList [m + 1] as ILExpression;
+
+									if (nextExpr.Code != ILCode.Stfld && (m + 2< vm.usefulList.Count)
+									    &&  (vm.usefulList [m + 2] as ILExpression).Code ==ILCode.Stfld )
+									{
+										nextExpr = vm.usefulList[m + 2] as ILExpression;
+									}
+
 									if (
 										nextExpr.Code == ILCode.Stfld
 										&& YieldReturnDecompiler.GetFieldDefinition (nextExpr.Operand as FieldReference) == this.stateField) {
 										vm.fieldStat = (int)nextExpr.Arguments [1].Operand;
 										vm.fieldStatChangedPos [vm.fieldStat] = m + 1;
 
-									} else {
+									}
+										
+									else
+									{
+
 										throw new SymbolicAnalysisFailedException ();
 									}
 								} else {
@@ -1241,7 +1252,10 @@ namespace ICSharpCode.Decompiler.ILAst
 							vm.firstStatSwitchExpr = expr;
 							expectedSwitchFollowBr = true;
 						}
-					} else if (isFlowControlCode (expr.Code) && expr.Arguments.Count>0 && expr.Arguments[0].Operand==vm.statILVariable) {
+					} else if (isFlowControlCode (expr.Code)
+					           && expr.Arguments.Count>0 && expr.Arguments[0].Operand==vm.statILVariable
+					          ) 
+					{
 						ILLabel lb = expr.Operand as ILLabel;
 						vm.fistStateSwitchLabelList.Add (lb);
 						vm.firstStatSwitchExpr = expr;
