@@ -56,7 +56,7 @@ Usage: ILSpyMac [options] directory/to/all/your/dll
 
 How to build:
 
-Open the ILSpyMac.sln by MonoDevelop or Xamarin, then click the build button.
+Open the ILSpyMac.sln by MonoDevelop ，  Xamarin or Visual Studio For MacOS, then click the build button.
 
 .NET 4.0 required.
 
